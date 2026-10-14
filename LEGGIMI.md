@@ -1,11 +1,11 @@
-# Traduttore Fumetti (prototipo 0.6)
+# Traduttore Fumetti (prototipo 0.7)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
 ## Come funziona
 
 1. Cattura lo schermo (permesso "registra/trasmetti schermo" di Android).
-2. Quando la pagina smette di muoversi, riconosce il testo sul telefono con ML Kit di Google (gratis, offline), in più passate: immagine normale, immagine ad alto contrasto, e rilettura ingrandita dei pezzi incerti. Unisce le scritte vicine, corregge gli errori tipici del lettering (es. "!!" letti come "l", lettere allungate) e riconosce i suoni (WHOOSH, BOOM...) mostrando il significato tra parentesi. Una passata a parte legge il giapponese.
+2. Quando la pagina smette di muoversi, riconosce il testo sul telefono con ML Kit di Google (gratis, offline), in più passate: immagine normale, immagine ad alto contrasto, e rilettura ingrandita dei pezzi incerti. Unisce le scritte vicine, corregge gli errori tipici del lettering (es. "!!" letti come "l", lettere allungate, lettere perse nelle scritte a contorno, parole attaccate) con un dizionario inglese di 20.000 parole e riconosce i suoni (WHOOSH, BOOM...) mostrando il significato tra parentesi. Una passata a parte legge il giapponese.
 3. Lo traduce sul telefono con il traduttore offline di Google (gratis). La prima volta scarica il modello inglese-italiano, circa 30 MB (e quello giapponese-italiano la prima volta che trova del giapponese), poi funziona anche senza internet.
 4. Disegna un riquadro bianco con l'italiano sopra ogni balloon. Puoi continuare a scorrere e girare pagina: le traduzioni spariscono e ricompaiono sulla pagina nuova dopo circa un secondo.
 
@@ -24,7 +24,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 - **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`. Lo stesso APK finisce anche nel ramo `apk` del repository.
 - **Android Studio**: File → Open → questa cartella, poi Build → Build APK(s).
 
-`apk/TraduttoreFumetti-0.6.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
+`apk/TraduttoreFumetti-0.7.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
 
 ## Installazione e uso
 

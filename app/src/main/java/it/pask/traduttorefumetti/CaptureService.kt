@@ -114,6 +114,13 @@ class CaptureService : Service() {
         )
         running = true
         updateNotification("Attivo: apri il tuo fumetto")
+        if (TextCleaner.words.isEmpty()) {
+            handler.post {
+                runCatching {
+                    assets.open("parole_en.txt").bufferedReader().use { TextCleaner.loadWords(it.lineSequence()) }
+                }
+            }
+        }
         handler.postDelayed(tick, INTERVAL_MS)
         return START_NOT_STICKY
     }
