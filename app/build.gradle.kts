@@ -13,6 +13,8 @@ android {
         targetSdk = 35
         versionCode = 4
         versionName = "0.4"
+        // Solo telefoni a 64 bit: l'APK pesa molto meno
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {

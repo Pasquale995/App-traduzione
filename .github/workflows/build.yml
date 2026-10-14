@@ -34,6 +34,8 @@ jobs:
           git init -q -b apk
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add app-debug.apk
+          # GitHub accetta file fino a 100 MB: se serve divido l'APK in pezzi
+          split -b 90m app-debug.apk app-debug.apk.part- && rm app-debug.apk
+          git add .
           git commit -qm "APK da ${GITHUB_SHA}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" apk
