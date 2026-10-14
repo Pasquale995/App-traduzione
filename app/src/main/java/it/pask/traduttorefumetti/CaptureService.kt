@@ -47,6 +47,14 @@ class CaptureService : Service() {
 
     private lateinit var windowManager: WindowManager
     private var overlay: OverlayView? = null
+    private var overlayParams: WindowManager.LayoutParams? = null
+    private var bubbles: ControlBubbles? = null
+    /** Traduzioni nascoste dal pallino: intanto non leggo e non traduco. */
+    @Volatile
+    private var paused = false
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        mainHandler.post { applyLook() }
+    }
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -107,6 +115,8 @@ class CaptureService : Service() {
         ocr = ComicOcr(recognizer, japanese)
         translator = PageTranslator.create(engine, apiKey)
         addOverlay()
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        if (prefs.getBoolean(MainActivity.KEY_BUBBLES, true)) addBubbles()
 
         val manager = getSystemService(MediaProjectionManager::class.java)
         val mp = manager.getMediaProjection(resultCode, data)
@@ -153,6 +163,10 @@ class CaptureService : Service() {
         projection = null
         overlay?.let { runCatching { windowManager.removeView(it) } }
         overlay = null
+        bubbles?.remove()
+        bubbles = null
+        getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
+            .unregisterOnSharedPreferenceChangeListener(prefsListener)
         if (::recognizer.isInitialized) recognizer.close()
         if (::japanese.isInitialized) japanese.close()
         super.onDestroy()
@@ -173,6 +187,7 @@ class CaptureService : Service() {
     }
 
     private fun step() {
+        if (paused) return
         followRotation()
         val fresh = grabFrame()
         if (fresh != null) {
@@ -274,7 +289,8 @@ class CaptureService : Service() {
     private fun maskRects(): List<Rect> {
         val drawn = overlay?.drawnRects.orEmpty()
         val margin = (screen.y * 0.02f).toInt()
-        return (shownBoxes + drawn).map { Rect(it).apply { inset(-margin, -margin) } }
+        val controls = bubbles?.screenRect?.takeIf { !it.isEmpty }
+        return (shownBoxes + drawn + listOfNotNull(controls)).map { Rect(it).apply { inset(-margin, -margin) } }
     }
 
     // ---------- Cattura ----------
@@ -346,14 +362,53 @@ class CaptureService : Service() {
         )
         params.gravity = Gravity.TOP or Gravity.START
         // Da Android 12 i tocchi passano attraverso una sovrapposizione solo se è al massimo all'80% opaca:
-        // così puoi continuare a scorrere e girare pagina con il dito.
-        params.alpha = 0.8f
+        // così puoi continuare a scorrere e girare pagina con il dito. L'opacità si sceglie nelle impostazioni.
+        params.alpha = MAX_ALPHA
         if (Build.VERSION.SDK_INT >= 28) {
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         windowManager.addView(view, params)
         overlay = view
+        overlayParams = params
+        applyLook()
+    }
+
+    /** Applica opacità dei riquadri e dimensione del testo scelte nelle impostazioni. */
+    private fun applyLook() {
+        val prefs = getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
+        val view = overlay ?: return
+        val params = overlayParams ?: return
+        params.alpha = (prefs.getInt(MainActivity.KEY_OPACITY, 80) / 100f).coerceIn(0.2f, MAX_ALPHA)
+        view.textScale = prefs.getInt(MainActivity.KEY_TEXT_SIZE, 100) / 100f
+        runCatching { windowManager.updateViewLayout(view, params) }
+    }
+
+    private fun addBubbles() {
+        val b = ControlBubbles(
+            this, windowManager,
+            onStop = { stopSelf() },
+            onToggle = { visible -> setTranslationsVisible(visible) },
+        )
+        b.show()
+        bubbles = b
+    }
+
+    /** Pallino "fumetto": nasconde le traduzioni e mette in pausa; riaccendendo rilegge la pagina. */
+    private fun setTranslationsVisible(visible: Boolean) {
+        overlay?.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
+        if (visible) {
+            mainHandler.post { overlay?.clear() }
+            handler.post {
+                paused = false
+                shownBoxes = emptyList()
+                previous = null
+                state = State.WAITING
+            }
+        } else {
+            paused = true
+            updateNotification("Traduzioni nascoste: tocca il fumetto per riaverle")
+        }
     }
 
     // ---------- Notifica ----------
@@ -412,6 +467,8 @@ class CaptureService : Service() {
 
         /** Ogni quanto guardo lo schermo. */
         private const val INTERVAL_MS = 400L
+        /** Opacità massima della sovrapposizione che lascia passare i tocchi (Android 12+). */
+        private const val MAX_ALPHA = 0.8f
         /** Differenza media di luminosità oltre la quale la pagina è "cambiata". */
         private const val CHANGE_THRESHOLD = 6
         /** Sotto questa differenza due fotogrammi di fila sono "fermi". */

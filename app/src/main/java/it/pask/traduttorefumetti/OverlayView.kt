@@ -18,6 +18,13 @@ class OverlayView(context: Context) : View(context) {
 
     private var items: List<Item> = emptyList()
 
+    /** Dimensione del testo scelta nelle impostazioni (1 = normale). */
+    var textScale = 1f
+        set(value) {
+            field = value.coerceIn(0.5f, 2f)
+            invalidate()
+        }
+
     /** Riquadri effettivamente disegnati (coordinate schermo), letti dal servizio. */
     @Volatile
     var drawnRects: List<Rect> = emptyList()
@@ -81,8 +88,8 @@ class OverlayView(context: Context) : View(context) {
 
     /** Sceglie la dimensione del testo più grande che entra nel balloon. */
     private fun fitText(text: String, width: Int, maxHeight: Float): StaticLayout {
-        var size = 18f * density
-        val min = 9f * density
+        var size = 18f * density * textScale
+        val min = 9f * density * textScale
         while (true) {
             textPaint.textSize = size
             val layout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, width)

@@ -11,11 +11,13 @@ import android.provider.Settings
 import android.text.InputType
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 
@@ -73,6 +75,34 @@ class MainActivity : Activity() {
             setText(prefs.getString(KEY_API, ""))
         }
         root.addView(keyField)
+
+        // Aspetto dei riquadri: si applica subito, anche con la traduzione già attiva.
+        fun slider(title: String, key: String, def: Int, min: Int, max: Int, unit: String) {
+            val lbl = label("")
+            fun show(v: Int) { lbl.text = "$title: $v$unit" }
+            val current = prefs.getInt(key, def).coerceIn(min, max)
+            show(current)
+            root.addView(lbl)
+            root.addView(SeekBar(this).apply {
+                this.max = max - min
+                progress = current - min
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar, p: Int, fromUser: Boolean) {
+                        show(p + min)
+                        if (fromUser) prefs.edit().putInt(key, p + min).apply()
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar) {}
+                    override fun onStopTrackingTouch(bar: SeekBar) {}
+                })
+            })
+        }
+        slider("Dimensione del testo", KEY_TEXT_SIZE, 100, 60, 160, "%")
+        slider("Opacità dei riquadri", KEY_OPACITY, 80, 20, 80, "% (massimo 80: oltre, Android blocca il dito)")
+        root.addView(CheckBox(this).apply {
+            text = "Mostra i pallini: Mercurio (tocca per fermare) e fumetto (mostra/nascondi traduzioni)"
+            isChecked = prefs.getBoolean(KEY_BUBBLES, true)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(KEY_BUBBLES, on).apply() }
+        })
 
         root.addView(Button(this).apply {
             text = "1. Consenti di disegnare sopra le altre app"
@@ -161,6 +191,9 @@ class MainActivity : Activity() {
         const val PREFS = "impostazioni"
         const val KEY_API = "api_key"
         const val KEY_MODEL = "model"
+        const val KEY_TEXT_SIZE = "text_size"
+        const val KEY_OPACITY = "opacity"
+        const val KEY_BUBBLES = "bubbles"
         private const val REQUEST_CAPTURE = 42
     }
 }

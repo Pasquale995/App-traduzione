@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.11)
+# Mercurio, traduttore di fumetti (prototipo 0.12)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -24,7 +24,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 - **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`. Lo stesso APK finisce anche nel ramo `apk` del repository.
 - **Android Studio**: File → Open → questa cartella, poi Build → Build APK(s).
 
-`apk/TraduttoreFumetti-0.11.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
+`apk/TraduttoreFumetti-0.12.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
 
 ## Installazione e uso
 
@@ -33,7 +33,9 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 3. Premi **1. Consenti di disegnare sopra le altre app** e attiva l'interruttore.
 4. Premi **2. Avvia traduzione** e, quando Android chiede cosa condividere, scegli **schermo intero**.
 5. Apri la tua app di fumetti. Per fermare: pulsante **Ferma** nella notifica.
-6. Mentre Mercurio è attivo Android blocca gli screenshot normali: usa il pulsante **Screenshot** nella notifica, chiudi la tendina e dopo 3 secondi la schermata (con le traduzioni) finisce in Galleria, cartella Immagini/Mercurio.
+6. Due pallini galleggianti (trascinabili) restano sullo schermo: **Mercurio** (toccalo per fermare tutto) e **fumetto** (nasconde o rimostra le traduzioni, per guardare la tavola pulita). Si possono togliere nelle impostazioni.
+7. Nelle impostazioni scegli anche **dimensione del testo** e **opacità dei riquadri** (al massimo 80%: oltre, Android non lascia più passare il dito); le modifiche valgono subito.
+8. Mentre Mercurio è attivo Android blocca gli screenshot normali: usa il pulsante **Screenshot** nella notifica, chiudi la tendina e dopo 3 secondi la schermata (con le traduzioni) finisce in Galleria, cartella Immagini/Mercurio.
 
 ## Limiti noti di questo prototipo
 
@@ -55,4 +57,4 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 
 ## Icona
 
-Coscia di pollo fritta in stile fumetto che sfreccia dentro un cerchio rosso; fuori dal cerchio è trasparente (disegno scelto da Pask, `strumenti/icona/originale.png`). `strumenti/icona/riempi_angoli.py` toglie gli angoli neri, `strumenti/icona/prepara.py` rende trasparente lo sfondo fuori dal cerchio e crea le immagini in `app/src/main/res/mipmap-*`. L'icona piccola della notifica è `drawable/ic_notifica.xml`.
+Coscia di pollo fritta in stile fumetto che sfreccia dentro un cerchio rosso; fuori dal cerchio è trasparente (disegno scelto da Pask, `strumenti/icona/originale.png`). `strumenti/icona/riempi_angoli.py` toglie gli angoli neri, `strumenti/icona/prepara.py` rende trasparente lo sfondo fuori dal cerchio, ruota il disegno di mezzo giro (osso in alto a sinistra) e crea le immagini in `app/src/main/res/mipmap-*`. L'icona piccola della notifica è `drawable/ic_notifica.xml`.
