@@ -13,16 +13,16 @@ In più puoi scegliere Claude come traduttore, più fedele e naturale ma a pagam
 
 ## Cosa ti serve
 
-- Un telefono Android 8.0 o più recente.
+- Un telefono Android 8.0 o più recente, a 64 bit (quasi tutti quelli degli ultimi anni).
 - Solo per Claude: una chiave API da https://console.anthropic.com.
 
 ## Come ottenere l'APK
 
 L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server di Google:
-- **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`.
+- **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`. Lo stesso APK finisce anche nel ramo `apk` del repository.
 - **Android Studio**: File → Open → questa cartella, poi Build → Build APK(s).
 
-`apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
+`apk/TraduttoreFumetti-0.4.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
 
 ## Installazione e uso
 
