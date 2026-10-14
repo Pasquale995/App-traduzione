@@ -337,7 +337,7 @@ class CaptureService : Service() {
         )
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("Traduttore Fumetti")
+            .setContentTitle("Mercurio")
             .setContentText(text)
             .setContentIntent(open)
             .setOngoing(true)

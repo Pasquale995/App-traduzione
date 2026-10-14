@@ -1,4 +1,4 @@
-# Traduttore Fumetti (prototipo 0.7)
+# Mercurio, traduttore di fumetti (prototipo 0.8)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -24,12 +24,12 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 - **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`. Lo stesso APK finisce anche nel ramo `apk` del repository.
 - **Android Studio**: File → Open → questa cartella, poi Build → Build APK(s).
 
-`apk/TraduttoreFumetti-0.7.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
+`apk/TraduttoreFumetti-0.8.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
 
 ## Installazione e uso
 
 1. Copia l'APK sul telefono e aprilo. Android chiederà di consentire l'installazione da questa fonte: accetta.
-2. Apri **Traduttore Fumetti** e lascia selezionato **Google offline (gratis)**.
+2. Apri **Mercurio** e lascia selezionato **Google offline (gratis)**.
 3. Premi **1. Consenti di disegnare sopra le altre app** e attiva l'interruttore.
 4. Premi **2. Avvia traduzione** e, quando Android chiede cosa condividere, scegli **schermo intero**.
 5. Apri la tua app di fumetti. Per fermare: pulsante **Ferma** nella notifica.
@@ -51,3 +51,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 - `app/src/main/java/.../ClaudeTranslator.kt`: traduzione con Claude (opzionale).
 - `app/src/main/java/.../OverlayView.kt`: disegno dei riquadri tradotti.
 - `app/src/main/java/.../MainActivity.kt`: schermata delle impostazioni.
+
+## Icona
+
+Aletta di pollo fritta in stile fumetto su un cerchio rosso, con l'osso che esce dal cerchio e una saetta a destra. È un disegno vettoriale (`app/src/main/res/drawable/ic_launcher.xml`) generato da `strumenti/icona.py`.
