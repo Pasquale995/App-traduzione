@@ -1,0 +1,76 @@
+package it.pask.traduttorefumetti
+
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.TranslatorOptions
+
+/** Traduce i testi di una pagina, uno per balloon, nello stesso ordine. */
+interface PageTranslator {
+    fun translate(texts: List<String>): List<String>
+
+    /** Riga da mostrare nella notifica (token usati), o null se non serve. */
+    fun usage(): String? = null
+
+    companion object {
+        const val GOOGLE = "google-offline"
+        const val CLAUDE_HAIKU = "claude-haiku-5-5"
+        const val CLAUDE_OPUS = "claude-opus-5-5"
+
+        fun create(engine: String, apiKey: String): PageTranslator =
+            if (engine == GOOGLE) GoogleOfflineTranslator() else ClaudeTranslator(apiKey, engine)
+    }
+}
+
+/**
+ * Traduttore gratuito di Google che gira sul telefono, senza internet
+ * (la prima volta scarica il modello inglese-italiano, circa 30 MB).
+ */
+class GoogleOfflineTranslator : PageTranslator {
+
+    private val client = Translation.getClient(
+        TranslatorOptions.Builder()
+            .setSourceLanguage(TranslateLanguage.ENGLISH)
+            .setTargetLanguage(TranslateLanguage.ITALIAN)
+            .build()
+    )
+    private var modelReady = false
+    private val cache = object : LinkedHashMap<String, String>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 3000
+    }
+
+    override fun translate(texts: List<String>): List<String> {
+        if (!modelReady) {
+            Tasks.await(client.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+            modelReady = true
+        }
+        return texts.map { src ->
+            cache.getOrPut(src) { Tasks.await(client.translate(sentenceCase(src))) }
+        }
+    }
+
+    companion object {
+        /**
+         * I fumetti sono spesso TUTTO MAIUSCOLO, che il traduttore gestisce male:
+         * lo porto in minuscolo con la maiuscola a inizio frase.
+         */
+        fun sentenceCase(text: String): String {
+            val letters = text.filter { it.isLetter() }
+            if (letters.isEmpty() || letters.count { it.isUpperCase() } < letters.length * 0.7) return text
+            val sb = StringBuilder(text.lowercase())
+            var capitalize = true
+            for (i in sb.indices) {
+                val c = sb[i]
+                if (capitalize && c.isLetter()) {
+                    sb[i] = c.uppercaseChar()
+                    capitalize = false
+                } else if (c == '.' || c == '!' || c == '?') {
+                    capitalize = true
+                }
+            }
+            // "I" inglese resta maiuscolo (I, I'm, I'll...).
+            return sb.toString().replace(Regex("""\bi\b"""), "I")
+        }
+    }
+}
