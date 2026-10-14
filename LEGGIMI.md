@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.10)
+# Mercurio, traduttore di fumetti (prototipo 0.11)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -24,7 +24,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 - **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`. Lo stesso APK finisce anche nel ramo `apk` del repository.
 - **Android Studio**: File → Open → questa cartella, poi Build → Build APK(s).
 
-`apk/TraduttoreFumetti-0.10.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
+`apk/TraduttoreFumetti-0.11.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
 
 ## Installazione e uso
 
@@ -33,6 +33,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 3. Premi **1. Consenti di disegnare sopra le altre app** e attiva l'interruttore.
 4. Premi **2. Avvia traduzione** e, quando Android chiede cosa condividere, scegli **schermo intero**.
 5. Apri la tua app di fumetti. Per fermare: pulsante **Ferma** nella notifica.
+6. Mentre Mercurio è attivo Android blocca gli screenshot normali: usa il pulsante **Screenshot** nella notifica, chiudi la tendina e dopo 3 secondi la schermata (con le traduzioni) finisce in Galleria, cartella Immagini/Mercurio.
 
 ## Limiti noti di questo prototipo
 

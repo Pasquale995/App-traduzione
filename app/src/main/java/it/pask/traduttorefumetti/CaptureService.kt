@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -18,10 +19,12 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.provider.MediaStore
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -65,6 +68,15 @@ class CaptureService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_SCREENSHOT) {
+            // Mentre Mercurio cattura lo schermo Android blocca gli screenshot normali:
+            // lo facciamo noi, con le traduzioni sopra, dopo che hai chiuso la tendina.
+            if (projection != null && ::handler.isInitialized) {
+                updateNotification("Chiudi la tendina: scatto tra 3 secondi")
+                handler.postDelayed({ saveScreenshot() }, SCREENSHOT_DELAY_MS)
+            }
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             stopSelf()
             return START_NOT_STICKY
@@ -233,6 +245,31 @@ class CaptureService : Service() {
         )
     }
 
+    /** Salva l'ultima schermata catturata (traduzioni comprese) in Immagini/Mercurio. */
+    private fun saveScreenshot() {
+        val bmp = lastBitmap?.copy(Bitmap.Config.ARGB_8888, false) ?: return
+        try {
+            val stamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.ITALY).format(java.util.Date())
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, "Mercurio_$stamp.png")
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                if (Build.VERSION.SDK_INT >= 29) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Mercurio")
+                }
+            }
+            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("impossibile creare il file")
+            contentResolver.openOutputStream(uri)?.use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                ?: throw IllegalStateException("impossibile scrivere il file")
+            updateNotification("Screenshot salvato in Galleria (Immagini/Mercurio)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Screenshot non riuscito", e)
+            updateNotification("Screenshot non salvato: ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            bmp.recycle()
+        }
+    }
+
     /** Zone da ignorare nel confronto: i nostri riquadri, un po' allargati. */
     private fun maskRects(): List<Rect> {
         val drawn = overlay?.drawnRects.orEmpty()
@@ -332,6 +369,10 @@ class CaptureService : Service() {
             this, 0, Intent(this, CaptureService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE,
         )
+        val shot = PendingIntent.getService(
+            this, 2, Intent(this, CaptureService::class.java).setAction(ACTION_SCREENSHOT),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
         val open = PendingIntent.getActivity(
             this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
@@ -341,6 +382,7 @@ class CaptureService : Service() {
             .setContentText(text)
             .setContentIntent(open)
             .setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "Screenshot", shot).build())
             .addAction(Notification.Action.Builder(null, "Ferma", stop).build())
             .build()
     }
@@ -363,6 +405,8 @@ class CaptureService : Service() {
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_RESULT_DATA = "resultData"
         const val ACTION_STOP = "it.pask.traduttorefumetti.STOP"
+        const val ACTION_SCREENSHOT = "it.pask.traduttorefumetti.SCREENSHOT"
+        private const val SCREENSHOT_DELAY_MS = 3000L
         private const val CHANNEL = "traduzione"
         private const val NOTIFICATION_ID = 1
 
