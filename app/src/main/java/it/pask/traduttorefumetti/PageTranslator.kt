@@ -15,11 +15,16 @@ interface PageTranslator {
 
     companion object {
         const val GOOGLE = "google-offline"
+        const val GROQ = "groq"
         const val CLAUDE_HAIKU = "claude-haiku-5-5"
         const val CLAUDE_OPUS = "claude-opus-5-5"
 
         fun create(engine: String, apiKey: String): PageTranslator =
-            if (engine == GOOGLE) GoogleOfflineTranslator() else ClaudeTranslator(apiKey, engine)
+            when (engine) {
+                GOOGLE -> GoogleOfflineTranslator()
+                GROQ -> GroqTranslator(apiKey)
+                else -> ClaudeTranslator(apiKey, engine)
+            }
     }
 }
 

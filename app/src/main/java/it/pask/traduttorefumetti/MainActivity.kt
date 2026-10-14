@@ -48,6 +48,7 @@ class MainActivity : Activity() {
         root.addView(label("Traduttore"))
         val engines = listOf(
             PageTranslator.GOOGLE to "Google offline (gratis, funziona anche senza internet)",
+            PageTranslator.GROQ to "LLM open source via Groq (gratis con chiave, traduzione più naturale)",
             PageTranslator.CLAUDE_HAIKU to "Claude Haiku 5.5 (a pagamento, serve la chiave API)",
             PageTranslator.CLAUDE_OPUS to "Claude Opus 5.5 (a pagamento, traduzione migliore)",
         )
@@ -65,9 +66,9 @@ class MainActivity : Activity() {
         }
         root.addView(modelGroup)
 
-        root.addView(label("Chiave API Anthropic (solo per Claude)"))
+        root.addView(label("Chiave API: gratuita da console.groq.com per Groq, oppure Anthropic per Claude"))
         keyField = EditText(this).apply {
-            hint = "sk-ant-…"
+            hint = "gsk_… oppure sk-ant-…"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setText(prefs.getString(KEY_API, ""))
         }
@@ -122,7 +123,7 @@ class MainActivity : Activity() {
         val engine = modelGroup.findViewById<RadioButton>(modelGroup.checkedRadioButtonId)?.tag as? String
             ?: PageTranslator.GOOGLE
         if (engine != PageTranslator.GOOGLE && key.isEmpty()) {
-            Toast.makeText(this, "Per Claude serve la chiave API", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Per questo traduttore serve la chiave API", Toast.LENGTH_SHORT).show()
             return
         }
         if (!Settings.canDrawOverlays(this)) {
