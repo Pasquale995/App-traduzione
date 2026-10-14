@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.8)
+# Mercurio, traduttore di fumetti (prototipo 0.9)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -24,7 +24,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 - **GitHub**: carica questa cartella in un repository (compresa la cartella nascosta `.github`). Nella scheda **Actions** parte da solo "Compila APK"; alla fine scarichi **TraduttoreFumetti-apk**, che contiene `app-debug.apk`. Lo stesso APK finisce anche nel ramo `apk` del repository.
 - **Android Studio**: File → Open → questa cartella, poi Build → Build APK(s).
 
-`apk/TraduttoreFumetti-0.8.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
+`apk/TraduttoreFumetti-0.9.apk` è la versione compilata su GitHub e firmata con la chiave in `.firma-traduttore`, così si installa sopra la vecchia. `apk/TraduttoreFumetti-0.2.apk` è una versione vecchia che usava solo Claude (a pagamento), compilata con `strumenti/compila-senza-gradle.sh` in un ambiente senza accesso a Google.
 
 ## Installazione e uso
 
@@ -54,4 +54,4 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 
 ## Icona
 
-Aletta di pollo fritta in stile fumetto su un cerchio rosso, con l'osso che esce dal cerchio e una saetta a destra. È un disegno vettoriale (`app/src/main/res/drawable/ic_launcher.xml`) generato da `strumenti/icona.py`.
+Coscia di pollo fritta in stile fumetto che sfreccia dentro un cerchio, su sfondo tutto rosso (disegno scelto da Pask, `strumenti/icona/originale.png`). `strumenti/icona/prepara.py` riempie di rosso gli angoli e crea le immagini dell'icona adattiva in `app/src/main/res/mipmap-*`. L'icona piccola della notifica è `drawable/ic_notifica.xml`.

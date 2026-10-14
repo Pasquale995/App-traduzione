@@ -336,7 +336,7 @@ class CaptureService : Service() {
             this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
         return Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notifica)
             .setContentTitle("Mercurio")
             .setContentText(text)
             .setContentIntent(open)
