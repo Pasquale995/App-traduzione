@@ -2,7 +2,11 @@ name: Compila APK
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -22,3 +26,14 @@ jobs:
         with:
           name: TraduttoreFumetti-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      # Copia l'APK anche nel ramo "apk", così si può scaricare con git
+      - name: Pubblica nel ramo apk
+        run: |
+          mkdir /tmp/out && cp app/build/outputs/apk/debug/app-debug.apk /tmp/out/
+          cd /tmp/out
+          git init -q -b apk
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add app-debug.apk
+          git commit -qm "APK da ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" apk
