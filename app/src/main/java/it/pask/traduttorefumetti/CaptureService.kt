@@ -25,15 +25,14 @@ import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
-import com.google.android.gms.tasks.Tasks
-import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 /**
- * Cattura lo schermo, riconosce i balloon con ML Kit (sul telefono), manda a Claude solo il testo
- * e disegna la traduzione sopra. Lavora solo quando la pagina cambia e poi resta ferma.
+ * Cattura lo schermo, riconosce i balloon con ML Kit (sul telefono, inglese e giapponese),
+ * li traduce e disegna la traduzione sopra. Lavora solo quando la pagina cambia e poi resta ferma.
  */
 class CaptureService : Service() {
 
@@ -51,6 +50,8 @@ class CaptureService : Service() {
     private var screen = Point()
 
     private lateinit var recognizer: TextRecognizer
+    private lateinit var japanese: TextRecognizer
+    private lateinit var ocr: ComicOcr
     private lateinit var translator: PageTranslator
 
     // Stato: "aspetta che la pagina sia ferma -> OCR -> traduci -> mostra".
@@ -90,6 +91,8 @@ class CaptureService : Service() {
         handler = Handler(worker.looper)
         windowManager = getSystemService(WindowManager::class.java)
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        japanese = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+        ocr = ComicOcr(recognizer, japanese)
         translator = PageTranslator.create(engine, apiKey)
         addOverlay()
 
@@ -132,6 +135,7 @@ class CaptureService : Service() {
         overlay?.let { runCatching { windowManager.removeView(it) } }
         overlay = null
         if (::recognizer.isInitialized) recognizer.close()
+        if (::japanese.isInitialized) japanese.close()
         super.onDestroy()
     }
 
@@ -182,12 +186,7 @@ class CaptureService : Service() {
     }
 
     private fun processPage(frame: Bitmap, sig: FrameSignature) {
-        val result = Tasks.await(recognizer.process(InputImage.fromBitmap(frame, 0)))
-        val balloons = result.textBlocks.mapNotNull { block ->
-            val box = block.boundingBox ?: return@mapNotNull null
-            val text = joinLines(block.lines.map { it.text })
-            if (text.count { it.isLetter() } < 2) null else box to text
-        }
+        val balloons = ocr.read(frame)
 
         state = State.SHOWING
         shown = sig

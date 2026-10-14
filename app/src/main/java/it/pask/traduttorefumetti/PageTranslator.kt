@@ -25,17 +25,15 @@ interface PageTranslator {
 
 /**
  * Traduttore gratuito di Google che gira sul telefono, senza internet
- * (la prima volta scarica il modello inglese-italiano, circa 30 MB).
+ * (la prima volta scarica il modello inglese-italiano, circa 30 MB, e il giapponese-italiano
+ * solo quando incontra del giapponese).
  */
 class GoogleOfflineTranslator : PageTranslator {
 
-    private val client = Translation.getClient(
-        TranslatorOptions.Builder()
-            .setSourceLanguage(TranslateLanguage.ENGLISH)
-            .setTargetLanguage(TranslateLanguage.ITALIAN)
-            .build()
-    )
+    private val client = clientFrom(TranslateLanguage.ENGLISH)
+    private val japanese = clientFrom(TranslateLanguage.JAPANESE)
     private var modelReady = false
+    private var japaneseReady = false
     private val cache = object : LinkedHashMap<String, String>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 3000
     }
@@ -46,9 +44,29 @@ class GoogleOfflineTranslator : PageTranslator {
             modelReady = true
         }
         return texts.map { src ->
-            cache.getOrPut(src) { Tasks.await(client.translate(sentenceCase(src))) }
+            cache.getOrPut(src) {
+                when {
+                    // Suono già spiegato in italiano da TextCleaner: lo lascio così.
+                    src.endsWith(")") && src.contains(" (") -> src
+                    TextCleaner.isJapanese(src) -> {
+                        if (!japaneseReady) {
+                            Tasks.await(japanese.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+                            japaneseReady = true
+                        }
+                        Tasks.await(japanese.translate(src))
+                    }
+                    else -> Tasks.await(client.translate(sentenceCase(src)))
+                }
+            }
         }
     }
+
+    private fun clientFrom(language: String) = Translation.getClient(
+        TranslatorOptions.Builder()
+            .setSourceLanguage(language)
+            .setTargetLanguage(TranslateLanguage.ITALIAN)
+            .build()
+    )
 
     companion object {
         /**

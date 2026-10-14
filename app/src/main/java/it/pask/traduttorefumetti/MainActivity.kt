@@ -41,7 +41,7 @@ class MainActivity : Activity() {
         }
 
         root.addView(label(
-            "Legge i balloon in inglese sullo schermo e ci scrive sopra la traduzione italiana. " +
+            "Legge i balloon in inglese o giapponese sullo schermo e ci scrive sopra la traduzione italiana. " +
                 "Avvialo, poi apri la tua app di fumetti."
         ))
 

@@ -11,8 +11,8 @@ android {
         applicationId = "it.pask.traduttorefumetti"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
         // Solo telefoni a 64 bit: l'APK pesa molto meno
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -48,6 +48,8 @@ android {
 dependencies {
     // OCR sul telefono, offline (alfabeto latino, modello incluso nell'app)
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // OCR giapponese (kanji e kana), anch'esso sul telefono
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
     // Traduzione inglese -> italiano sul telefono, gratis e offline
     implementation("com.google.mlkit:translate:17.0.3")
     // SDK ufficiale Anthropic per chiamare Claude (opzionale, a pagamento)

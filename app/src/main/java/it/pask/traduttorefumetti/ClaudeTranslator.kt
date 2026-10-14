@@ -78,7 +78,7 @@ class ClaudeTranslator(apiKey: String, private val model: String) : PageTranslat
 
     companion object {
         private val SYSTEM_PROMPT = """
-            You translate English comic book speech balloons into Italian.
+            You translate English or Japanese comic book speech balloons into Italian.
             Input: one balloon per line as `N|text`, in reading order, all from the same page; use the other balloons as context.
             The text comes from OCR: it may be ALL CAPS, broken across lines, or contain small recognition errors. Fix those silently.
             Write natural, faithful Italian as a good Italian comics translator would: keep tone, slang, jokes and emphasis; adapt sound effects to Italian conventions; use normal sentence case.
