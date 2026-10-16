@@ -15,13 +15,17 @@ import java.net.URL
  * Con [pcAddress] parla invece con Ollama sul PC di casa (stesso protocollo, nessuna chiave):
  * Gemma gira sulla scheda video del PC e il telefono manda solo il testo in Wi-Fi.
  */
-class GroqTranslator(private val apiKey: String, private val pcAddress: String? = null) : PageTranslator {
+class GroqTranslator(
+    private val apiKey: String,
+    private val pcAddress: String? = null,
+    pcModel: String? = null,
+) : PageTranslator {
 
     private val baseUrl = pcAddress?.let { "http://${withPort(it)}/v1/" } ?: "https://api.groq.com/openai/v1/"
     private val name = if (pcAddress != null) "PC" else "Groq"
 
     private val fallback = GoogleOfflineTranslator()
-    private var model: String? = null
+    private var model: String? = pcModel?.takeIf { it.isNotBlank() }
     private var lastNote: String? = null
     private var tokens = 0L
     private var lastRaw = ""
@@ -52,6 +56,21 @@ class GroqTranslator(private val apiKey: String, private val pcAddress: String? 
             }
         }
         return texts.map { t -> cache[t] ?: if (isExplainedSound(t)) t else "" }
+    }
+
+    /** I modelli scaricati sul PC (o disponibili su Groq). */
+    fun listModels(): List<String> = JSONObject(call("models", null)).getJSONArray("data").let { a ->
+        (0 until a.length()).map { a.getJSONObject(it).getString("id") }
+    }
+
+    /** Il modello che userà (lo sceglie se non è fissato). */
+    fun modelName(): String = model ?: chooseModel().also { model = it }
+
+    /** Una pagina di prova senza ripiego su Google: per confrontare i modelli. */
+    fun tryPage(texts: List<String>): List<String> {
+        val r = request(texts)
+        if (r.isEmpty()) throw IllegalStateException("risposta strana: «${lastRaw.take(200)}»")
+        return texts.indices.map { r[it + 1].orEmpty() }
     }
 
     /** Una frase senza ripiego su Google: per il pulsante di prova (gli errori arrivano a chi chiama). */

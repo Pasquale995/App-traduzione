@@ -33,11 +33,13 @@ interface PageTranslator {
                 GOOGLE -> GoogleOfflineTranslator()
                 GEMMA -> GemmaTranslator(context, status)
                 GROQ -> GroqTranslator(apiKey)
-                PC -> GroqTranslator(
-                    "",
-                    context.getSharedPreferences(MainActivity.PREFS, android.content.Context.MODE_PRIVATE)
-                        .getString(MainActivity.KEY_PC_ADDRESS, "").orEmpty(),
-                )
+                PC -> context.getSharedPreferences(MainActivity.PREFS, android.content.Context.MODE_PRIVATE).let {
+                    GroqTranslator(
+                        "",
+                        it.getString(MainActivity.KEY_PC_ADDRESS, "").orEmpty(),
+                        it.getString(MainActivity.KEY_PC_MODEL, ""),
+                    )
+                }
                 else -> ClaudeTranslator(apiKey, engine)
             }
     }

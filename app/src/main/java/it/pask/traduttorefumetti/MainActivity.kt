@@ -132,6 +132,41 @@ class MainActivity : Activity() {
         }
         root.addView(pcField)
         val pcTest = label("")
+        val pcModelLabel = label("")
+        fun showModel() {
+            pcModelLabel.text = "Modello sul PC: " + (prefs.getString(KEY_PC_MODEL, "").orEmpty().ifBlank { "automatico (il primo Gemma)" })
+        }
+        showModel()
+        root.addView(pcModelLabel)
+        root.addView(Button(this).apply {
+            text = "Scegli il modello del PC"
+            setOnClickListener {
+                val address = pcField.text.toString().trim()
+                if (address.isEmpty()) {
+                    pcTest.text = "Scrivi prima l'indirizzo del PC"
+                    return@setOnClickListener
+                }
+                prefs.edit().putString(KEY_PC_ADDRESS, address).apply()
+                pcTest.text = "Chiedo al PC quali modelli ha…"
+                Thread {
+                    val models = runCatching { GroqTranslator("", address).listModels() }
+                    runOnUiThread {
+                        models.onFailure { pcTest.text = "Il PC non risponde: ${it.message}" }
+                        models.onSuccess { list ->
+                            pcTest.text = ""
+                            val items = (listOf("Automatico") + list).toTypedArray()
+                            android.app.AlertDialog.Builder(this@MainActivity)
+                                .setTitle("Modello sul PC")
+                                .setItems(items) { _, i ->
+                                    prefs.edit().putString(KEY_PC_MODEL, if (i == 0) "" else items[i]).apply()
+                                    showModel()
+                                }
+                                .show()
+                        }
+                    }
+                }.start()
+            }
+        })
         root.addView(Button(this).apply {
             text = "Prova il PC"
             setOnClickListener {
@@ -145,14 +180,16 @@ class MainActivity : Activity() {
                 pcTest.text = "Provo il PC… la prima volta carica il modello"
                 Thread {
                     val t0 = System.currentTimeMillis()
+                    val pc = GroqTranslator("", address, prefs.getString(KEY_PC_MODEL, ""))
                     val result = runCatching {
-                        GroqTranslator("", address).tryOne("DAMN... TOP RANKERS HAVE CONNECTIONS WITH GOVERNMENTS TOO.")
+                        val name = pc.modelName()
+                        name to pc.tryPage(SAMPLE_PAGE)
                     }
                     val secs = (System.currentTimeMillis() - t0) / 1000.0
                     runOnUiThread {
                         isEnabled = true
                         pcTest.text = result.fold(
-                            { "Risposta in ${secs}s: «$it»" },
+                            { (name, lines) -> "$name, pagina di prova in ${secs}s:\n" + lines.joinToString("\n") { "• $it" } },
                             { "Il PC non risponde: ${it.message}" },
                         )
                     }
@@ -337,6 +374,15 @@ class MainActivity : Activity() {
         const val KEY_JAPANESE = "japanese"
         const val KEY_GEMMA_GPU = "gemma_gpu"
         const val KEY_PC_ADDRESS = "pc_address"
+        const val KEY_PC_MODEL = "pc_model"
+
+        /** Piccola pagina di prova per confrontare i modelli: tono, slang, un suono, un modo di dire. */
+        private val SAMPLE_PAGE = listOf(
+            "DAMN... TOP RANKERS HAVE CONNECTIONS WITH GOVERNMENTS TOO.",
+            "WITH ME IN THE CENTER, SO THAT KOREA COULD BRING BACK GOOD RESULTS IN THE INTERNATIONAL TOURNAMENT.",
+            "YOU THINK YOU CAN JUST WALK IN HERE LIKE YOU OWN THE PLACE?",
+            "NO WAY... HE'S BREAKING A SWEAT? THIS GUY'S A MONSTER!",
+        )
         private const val REQUEST_CAPTURE = 42
         private const val REQUEST_MODEL = 43
     }
