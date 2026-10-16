@@ -11,8 +11,14 @@ import java.net.URL
  * (console.groq.com, limiti giornalieri). Riceve solo il testo letto dall'OCR sul telefono:
  * una richiesta per pagina, formato compatto "N|testo", cache delle frasi già viste.
  * Se Groq non risponde o il limite gratuito è finito, usa il traduttore offline di Google.
+ *
+ * Con [pcAddress] parla invece con Ollama sul PC di casa (stesso protocollo, nessuna chiave):
+ * Gemma gira sulla scheda video del PC e il telefono manda solo il testo in Wi-Fi.
  */
-class GroqTranslator(private val apiKey: String) : PageTranslator {
+class GroqTranslator(private val apiKey: String, private val pcAddress: String? = null) : PageTranslator {
+
+    private val baseUrl = pcAddress?.let { "http://${withPort(it)}/v1/" } ?: "https://api.groq.com/openai/v1/"
+    private val name = if (pcAddress != null) "PC" else "Groq"
 
     private val fallback = GoogleOfflineTranslator()
     private var model: String? = null
@@ -23,7 +29,7 @@ class GroqTranslator(private val apiKey: String) : PageTranslator {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 3000
     }
 
-    override fun usage(): String? = lastNote ?: model?.let { "Groq ${it.substringAfterLast('/')} · token: $tokens" }
+    override fun usage(): String? = lastNote ?: model?.let { "$name ${it.substringAfterLast('/')} · token: $tokens" }
 
     override fun translate(texts: List<String>): List<String> {
         // I suoni già spiegati da TextCleaner ("WHOOSH (spostamento d'aria)") restano così.
@@ -34,13 +40,23 @@ class GroqTranslator(private val apiKey: String) : PageTranslator {
                 todo.forEachIndexed { i, src -> result[i + 1]?.let { cache[src] = it } }
                 lastNote = null
             } catch (e: Exception) {
-                Log.w("TraduttoreFumetti", "Groq non disponibile, uso Google offline", e)
-                lastNote = if (e is LimitReached) "limite Groq raggiunto: uso Google offline" else "Groq non risponde: uso Google offline"
+                Log.w("TraduttoreFumetti", "$name non disponibile, uso Google offline", e)
+                lastNote = when {
+                    e is LimitReached -> "limite $name raggiunto: uso Google offline"
+                    pcAddress != null -> "il PC non risponde (acceso? stessa Wi-Fi?): uso Google offline"
+                    else -> "Groq non risponde: uso Google offline"
+                }
                 val offline = fallback.translate(todo)
                 return texts.map { t -> cache[t] ?: if (isExplainedSound(t)) t else offline[todo.indexOf(t)] }
             }
         }
         return texts.map { t -> cache[t] ?: if (isExplainedSound(t)) t else "" }
+    }
+
+    /** Una frase senza ripiego su Google: per il pulsante di prova (gli errori arrivano a chi chiama). */
+    fun tryOne(text: String): String {
+        val r = request(listOf(text))[1]
+        return if (r.isNullOrBlank()) throw IllegalStateException("risposta vuota") else r
     }
 
     private fun isExplainedSound(t: String) = t.endsWith(")") && t.contains(" (") && t.substringBefore(" (").none { it.isLowerCase() }
@@ -74,16 +90,22 @@ class GroqTranslator(private val apiKey: String) : PageTranslator {
         val ids = JSONObject(call("models", null)).getJSONArray("data").let { a ->
             (0 until a.length()).map { a.getJSONObject(it).getString("id") }
         }
+        if (pcAddress != null) {
+            // Sul PC uso il Gemma scaricato con Ollama (se ce ne sono più, il primo).
+            return ids.firstOrNull { it.contains("gemma") } ?: ids.firstOrNull()
+                ?: throw IllegalStateException("Sul PC non c'è nessun modello: lancia 'ollama pull gemma3:4b'")
+        }
         PREFERRED.firstOrNull { it in ids }?.let { return it }
         return ids.firstOrNull { id -> SKIP.none { id.contains(it) } }
             ?: throw IllegalStateException("Nessun modello Groq disponibile")
     }
 
     private fun call(path: String, body: String?): String {
-        val conn = URL("https://api.groq.com/openai/v1/$path").openConnection() as HttpURLConnection
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 60_000
-        conn.setRequestProperty("Authorization", "Bearer $apiKey")
+        val conn = URL(baseUrl + path).openConnection() as HttpURLConnection
+        conn.connectTimeout = if (pcAddress != null) 4_000 else 10_000
+        // Sul PC la prima richiesta carica il modello nella scheda video: può volerci un po'.
+        conn.readTimeout = if (pcAddress != null) 180_000 else 60_000
+        if (apiKey.isNotBlank()) conn.setRequestProperty("Authorization", "Bearer $apiKey")
         if (body != null) {
             conn.requestMethod = "POST"
             conn.doOutput = true
@@ -95,8 +117,8 @@ class GroqTranslator(private val apiKey: String) : PageTranslator {
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
         if (code !in 200..299) {
-            if (code == 401) throw IllegalStateException("Chiave Groq non valida")
-            throw IllegalStateException("Groq ha risposto $code: ${text.take(200)}")
+            if (code == 401) throw IllegalStateException("Chiave $name non valida")
+            throw IllegalStateException("$name ha risposto $code: ${text.take(200)}")
         }
         return text
     }
@@ -104,6 +126,12 @@ class GroqTranslator(private val apiKey: String) : PageTranslator {
     private class LimitReached : Exception("Limite gratuito Groq raggiunto")
 
     companion object {
+        /** "192.168.1.20" -> "192.168.1.20:11434" (la porta di Ollama), se manca la porta. */
+        fun withPort(address: String): String {
+            val a = address.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
+            return if (a.substringAfterLast(']').contains(':')) a else "$a:11434"
+        }
+
         private val PREFERRED = listOf(
             "llama-3.3-70b-versatile",
             "moonshotai/kimi-k2-instruct",

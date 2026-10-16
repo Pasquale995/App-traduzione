@@ -27,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var modelGroup: RadioGroup
     private lateinit var status: TextView
     private lateinit var gemmaStatus: TextView
+    private lateinit var pcField: EditText
     @Volatile
     private var copying = false
 
@@ -54,6 +55,7 @@ class MainActivity : Activity() {
         val engines = listOf(
             PageTranslator.GOOGLE to "Google offline (gratis, funziona anche senza internet)",
             PageTranslator.GEMMA to "Gemma sul telefono (sperimentale: gratis e offline, serve il file del modello)",
+            PageTranslator.PC to "Gemma sul mio PC (gratis: Ollama sul PC, stessa rete Wi-Fi)",
             PageTranslator.GROQ to "LLM open source via Groq (gratis con chiave, traduzione più naturale)",
             PageTranslator.CLAUDE_HAIKU to "Claude Haiku 5.5 (a pagamento, serve la chiave API)",
             PageTranslator.CLAUDE_OPUS to "Claude Opus 5.5 (a pagamento, traduzione migliore)",
@@ -121,6 +123,43 @@ class MainActivity : Activity() {
             setText(prefs.getString(KEY_API, ""))
         }
         root.addView(keyField)
+
+        root.addView(label("Indirizzo del PC con Ollama (es. 192.168.1.20)"))
+        pcField = EditText(this).apply {
+            hint = "192.168.1.…"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setText(prefs.getString(KEY_PC_ADDRESS, ""))
+        }
+        root.addView(pcField)
+        val pcTest = label("")
+        root.addView(Button(this).apply {
+            text = "Prova il PC"
+            setOnClickListener {
+                val address = pcField.text.toString().trim()
+                if (address.isEmpty()) {
+                    pcTest.text = "Scrivi prima l'indirizzo del PC"
+                    return@setOnClickListener
+                }
+                prefs.edit().putString(KEY_PC_ADDRESS, address).apply()
+                isEnabled = false
+                pcTest.text = "Provo il PC… la prima volta carica il modello"
+                Thread {
+                    val t0 = System.currentTimeMillis()
+                    val result = runCatching {
+                        GroqTranslator("", address).tryOne("DAMN... TOP RANKERS HAVE CONNECTIONS WITH GOVERNMENTS TOO.")
+                    }
+                    val secs = (System.currentTimeMillis() - t0) / 1000.0
+                    runOnUiThread {
+                        isEnabled = true
+                        pcTest.text = result.fold(
+                            { "Risposta in ${secs}s: «$it»" },
+                            { "Il PC non risponde: ${it.message}" },
+                        )
+                    }
+                }.start()
+            }
+        })
+        root.addView(pcTest)
 
         // Aspetto dei riquadri: si applica subito, anche con la traduzione già attiva.
         fun slider(title: String, key: String, def: Int, min: Int, max: Int, unit: String) {
@@ -207,6 +246,11 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Prima scegli il file del modello Gemma", Toast.LENGTH_LONG).show()
             return
         }
+        val pc = pcField.text.toString().trim()
+        if (engine == PageTranslator.PC && pc.isEmpty()) {
+            Toast.makeText(this, "Scrivi l'indirizzo del PC", Toast.LENGTH_LONG).show()
+            return
+        }
         if (PageTranslator.needsKey(engine) && key.isEmpty()) {
             Toast.makeText(this, "Per questo traduttore serve la chiave API", Toast.LENGTH_SHORT).show()
             return
@@ -217,6 +261,7 @@ class MainActivity : Activity() {
         }
         getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_API, key)
+            .putString(KEY_PC_ADDRESS, pc)
             .putString(KEY_MODEL, engine)
             .apply()
         val manager = getSystemService(MediaProjectionManager::class.java)
@@ -291,6 +336,7 @@ class MainActivity : Activity() {
         const val KEY_BUBBLES = "bubbles"
         const val KEY_JAPANESE = "japanese"
         const val KEY_GEMMA_GPU = "gemma_gpu"
+        const val KEY_PC_ADDRESS = "pc_address"
         private const val REQUEST_CAPTURE = 42
         private const val REQUEST_MODEL = 43
     }

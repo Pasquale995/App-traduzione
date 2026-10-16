@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.16)
+# Mercurio, traduttore di fumetti (prototipo 0.17)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -69,3 +69,11 @@ Traduce con Gemma, il modello aperto di Google, tutto sul telefono: gratis, offl
 Se il modello non parte, Mercurio usa da solo Google offline (lo dice la notifica).
 
 La lettura delle scritte ora fa le passate extra solo quando la prima lettura è incerta; la lettura del giapponese si può spegnere per andare più veloci.
+
+## Gemma sul mio PC (dalla 0.17)
+
+Gemma gira sulla scheda video del PC con Ollama; il telefono manda solo il testo in Wi-Fi.
+1. Sul PC installa Ollama (ollama.com) e scarica il modello: `ollama pull gemma3:4b` (con 8 GB di scheda video si può provare `gemma3:12b`).
+2. Fai accettare a Ollama le richieste dalla rete: variabile d'ambiente `OLLAMA_HOST=0.0.0.0`, poi riavvia Ollama; consenti l'accesso dal firewall di Windows (rete privata).
+3. Trova l'indirizzo del PC (`ipconfig`, "Indirizzo IPv4") e scrivilo in Mercurio; "Prova il PC", poi scegli "Gemma sul mio PC".
+Il PC deve essere acceso (non in sospensione) e sulla stessa Wi-Fi. Se non risponde, Mercurio usa Google offline.

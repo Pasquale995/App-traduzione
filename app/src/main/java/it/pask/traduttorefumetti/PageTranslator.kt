@@ -20,10 +20,11 @@ interface PageTranslator {
         const val GOOGLE = "google-offline"
         const val GEMMA = "gemma-telefono"
         const val GROQ = "groq"
+        const val PC = "pc-ollama"
         const val CLAUDE_HAIKU = "claude-haiku-5-5"
         const val CLAUDE_OPUS = "claude-opus-5-5"
 
-        fun needsKey(engine: String) = engine != GOOGLE && engine != GEMMA
+        fun needsKey(engine: String) = engine != GOOGLE && engine != GEMMA && engine != PC
 
         fun create(
             engine: String, apiKey: String, context: android.content.Context, status: (String) -> Unit = {},
@@ -32,6 +33,11 @@ interface PageTranslator {
                 GOOGLE -> GoogleOfflineTranslator()
                 GEMMA -> GemmaTranslator(context, status)
                 GROQ -> GroqTranslator(apiKey)
+                PC -> GroqTranslator(
+                    "",
+                    context.getSharedPreferences(MainActivity.PREFS, android.content.Context.MODE_PRIVATE)
+                        .getString(MainActivity.KEY_PC_ADDRESS, "").orEmpty(),
+                )
                 else -> ClaudeTranslator(apiKey, engine)
             }
     }
