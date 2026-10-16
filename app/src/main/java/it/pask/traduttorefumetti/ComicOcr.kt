@@ -17,31 +17,40 @@ import kotlin.math.roundToInt
 /**
  * Legge le scritte di una pagina di fumetto con ML Kit, sul telefono, in più passate:
  * 1. immagine normale;
- * 2. immagine in bianco e nero molto contrastata (aiuta con retini e sfondi disegnati);
- * 3. i pezzi letti male vengono riletti ingranditi (aiuta con lettering a mano e suoni).
+ * 2. solo se la prima lettura è incerta (o vuota): immagine in bianco e nero molto contrastata
+ *    (aiuta con retini e sfondi disegnati);
+ * 3. solo se resta qualcosa di incerto: i pezzi letti male vengono riletti ingranditi
+ *    (aiuta con lettering a mano e suoni).
  * Poi unisce le scritte vicine (es. "STAY" + "AWAYYY!!!") in un solo testo.
- * Infine una passata con il lettore giapponese trova kanji e kana.
+ * Infine, se attiva nelle impostazioni, una passata con il lettore giapponese trova kanji e kana.
  */
 class ComicOcr(private val recognizer: TextRecognizer, private val japanese: TextRecognizer?) {
+
+    /** Lettura del giapponese: si può spegnere dalle impostazioni per andare più veloci. */
+    @Volatile
+    var japaneseOn = true
 
     data class Piece(val box: Rect, val text: String, val confidence: Float, val lineHeight: Int)
 
     fun read(frame: Bitmap): List<Pair<Rect, String>> {
         val pieces = ArrayList(recognize(frame, 1f, 0, 0))
 
-        val contrast = highContrast(frame, 1f)
-        mergeInto(pieces, recognize(contrast, 1f, 0, 0))
-        contrast.recycle()
+        // Le passate in più costano tempo: le faccio solo se la prima ha letto male qualcosa.
+        if (pieces.isEmpty() || pieces.any { isDoubtful(it) }) {
+            val contrast = highContrast(frame, 1f)
+            mergeInto(pieces, recognize(contrast, 1f, 0, 0))
+            contrast.recycle()
+        }
 
         // Rileggo ingranditi i pezzi più incerti (al massimo alcuni, per non rallentare).
-        val doubtful = pieces.filter { it.confidence < REFINE_BELOW || TextCleaner.looksBroken(it.text) }
+        val doubtful = pieces.filter { isDoubtful(it) }
             .sortedBy { score(it) }.take(MAX_REFINES).toSet()
-        val refined = pieces.map { p -> if (p in doubtful) refine(frame, p) ?: p else p }
+        val refined = if (doubtful.isEmpty()) pieces else pieces.map { p -> if (p in doubtful) refine(frame, p) ?: p else p }
         var latin = group(dedupe(refined))
             .map { it.box to TextCleaner.clean(it.text) }
             .filter { (_, t) -> t.count { it.isLetter() } >= 2 }
 
-        val jp = japanese ?: return latin
+        val jp = japanese?.takeIf { japaneseOn } ?: return latin
         val kanji = recognize(frame, 1f, 0, 0, jp, joinWithSpaces = false)
             .filter { TextCleaner.isJapanese(it.text) }
         if (kanji.isEmpty()) return latin
@@ -122,6 +131,8 @@ class ComicOcr(private val recognizer: TextRecognizer, private val japanese: Tex
         )
         return if (score(merged) > score(p)) merged else null
     }
+
+    private fun isDoubtful(p: Piece) = p.confidence < REFINE_BELOW || TextCleaner.looksBroken(p.text)
 
     /** Qualità di una lettura: fiducia di ML Kit, penalizzata se il testo sembra spazzatura. */
     private fun score(p: Piece): Float =

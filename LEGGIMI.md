@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.12)
+# Mercurio, traduttore di fumetti (prototipo 0.13)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -58,3 +58,14 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 ## Icona
 
 Coscia di pollo fritta in stile fumetto che sfreccia dentro un cerchio rosso; fuori dal cerchio è trasparente (disegno scelto da Pask, `strumenti/icona/originale.png`). `strumenti/icona/riempi_angoli.py` toglie gli angoli neri, `strumenti/icona/prepara.py` rende trasparente lo sfondo fuori dal cerchio, ruota il disegno di mezzo giro (osso in alto a sinistra) e crea le immagini in `app/src/main/res/mipmap-*`. L'icona piccola della notifica è `drawable/ic_notifica.xml`.
+
+## Gemma sul telefono (sperimentale, dalla 0.13)
+
+Traduce con Gemma, il modello aperto di Google, tutto sul telefono: gratis, offline, nessun testo esce dal telefono.
+1. Da browser, accedi a Hugging Face, accetta la licenza Gemma e scarica un file `.task`:
+   - `gemma-3n-E2B-it-int4.task` (google/gemma-3n-E2B-it-litert-preview, circa 3 GB): traduce meglio;
+   - `Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task` (litert-community/Gemma3-1B-IT, circa 550 MB): più veloce, italiano più debole.
+2. In Mercurio: "Scegli il file del modello Gemma (.task)", poi scegli "Gemma sul telefono" e avvia.
+Se il modello non parte, Mercurio usa da solo Google offline (lo dice la notifica).
+
+La lettura delle scritte ora fa le passate extra solo quando la prima lettura è incerta; la lettura del giapponese si può spegnere per andare più veloci.

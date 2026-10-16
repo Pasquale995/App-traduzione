@@ -26,6 +26,9 @@ class MainActivity : Activity() {
     private lateinit var keyField: EditText
     private lateinit var modelGroup: RadioGroup
     private lateinit var status: TextView
+    private lateinit var gemmaStatus: TextView
+    @Volatile
+    private var copying = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +53,7 @@ class MainActivity : Activity() {
         root.addView(label("Traduttore"))
         val engines = listOf(
             PageTranslator.GOOGLE to "Google offline (gratis, funziona anche senza internet)",
+            PageTranslator.GEMMA to "Gemma sul telefono (sperimentale: gratis e offline, serve il file del modello)",
             PageTranslator.GROQ to "LLM open source via Groq (gratis con chiave, traduzione più naturale)",
             PageTranslator.CLAUDE_HAIKU to "Claude Haiku 5.5 (a pagamento, serve la chiave API)",
             PageTranslator.CLAUDE_OPUS to "Claude Opus 5.5 (a pagamento, traduzione migliore)",
@@ -67,6 +71,20 @@ class MainActivity : Activity() {
             if (checkedRadioButtonId == -1) check(1)
         }
         root.addView(modelGroup)
+
+        gemmaStatus = label("")
+        root.addView(gemmaStatus)
+        root.addView(Button(this).apply {
+            text = "Scegli il file del modello Gemma (.task)"
+            setOnClickListener {
+                @Suppress("DEPRECATION")
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),
+                    REQUEST_MODEL,
+                )
+            }
+        })
+        refreshGemma()
 
         root.addView(label("Chiave API: gratuita da console.groq.com per Groq, oppure Anthropic per Claude"))
         keyField = EditText(this).apply {
@@ -102,6 +120,11 @@ class MainActivity : Activity() {
             text = "Mostra i pallini: Mercurio (tocca per fermare) e fumetto (mostra/nascondi traduzioni)"
             isChecked = prefs.getBoolean(KEY_BUBBLES, true)
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(KEY_BUBBLES, on).apply() }
+        })
+        root.addView(CheckBox(this).apply {
+            text = "Leggi anche il giapponese (kanji e kana). Spento è più veloce"
+            isChecked = prefs.getBoolean(KEY_JAPANESE, true)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(KEY_JAPANESE, on).apply() }
         })
 
         root.addView(Button(this).apply {
@@ -152,7 +175,11 @@ class MainActivity : Activity() {
         val key = keyField.text.toString().trim()
         val engine = modelGroup.findViewById<RadioButton>(modelGroup.checkedRadioButtonId)?.tag as? String
             ?: PageTranslator.GOOGLE
-        if (engine != PageTranslator.GOOGLE && key.isEmpty()) {
+        if (engine == PageTranslator.GEMMA && (copying || !GemmaTranslator.modelFile(this).exists())) {
+            Toast.makeText(this, "Prima scegli il file del modello Gemma", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (PageTranslator.needsKey(engine) && key.isEmpty()) {
             Toast.makeText(this, "Per questo traduttore serve la chiave API", Toast.LENGTH_SHORT).show()
             return
         }
@@ -173,6 +200,10 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_MODEL) {
+            data?.data?.takeIf { resultCode == RESULT_OK }?.let { copyModel(it) }
+            return
+        }
         if (requestCode != REQUEST_CAPTURE) return
         if (resultCode != RESULT_OK || data == null) {
             Toast.makeText(this, "Serve il permesso di cattura schermo", Toast.LENGTH_SHORT).show()
@@ -187,6 +218,42 @@ class MainActivity : Activity() {
         moveTaskToBack(true)
     }
 
+    private fun refreshGemma() {
+        val f = GemmaTranslator.modelFile(this)
+        gemmaStatus.text = when {
+            copying -> "Copio il modello Gemma…"
+            f.exists() -> "✓ Modello Gemma pronto (${f.length() / 1_000_000} MB)"
+            else -> "Gemma: nessun modello scelto"
+        }
+    }
+
+    /** Copia il modello scelto nella memoria dell'app (Gemma ha bisogno di un file vero). */
+    private fun copyModel(uri: Uri) {
+        if (copying) return
+        copying = true
+        refreshGemma()
+        val dest = GemmaTranslator.modelFile(this)
+        val tmp = java.io.File(dest.path + ".tmp")
+        Thread {
+            val ok = runCatching {
+                contentResolver.openInputStream(uri)!!.use { input ->
+                    tmp.outputStream().use { input.copyTo(it, 1 shl 20) }
+                }
+                check(tmp.length() > 10_000_000) { "il file è troppo piccolo per essere un modello" }
+                dest.delete()
+                check(tmp.renameTo(dest))
+            }
+            runOnUiThread {
+                copying = false
+                ok.exceptionOrNull()?.let {
+                    tmp.delete()
+                    Toast.makeText(this, "Copia non riuscita: ${it.message}", Toast.LENGTH_LONG).show()
+                }
+                refreshGemma()
+            }
+        }.start()
+    }
+
     companion object {
         const val PREFS = "impostazioni"
         const val KEY_API = "api_key"
@@ -194,6 +261,8 @@ class MainActivity : Activity() {
         const val KEY_TEXT_SIZE = "text_size"
         const val KEY_OPACITY = "opacity"
         const val KEY_BUBBLES = "bubbles"
+        const val KEY_JAPANESE = "japanese"
         private const val REQUEST_CAPTURE = 42
+        private const val REQUEST_MODEL = 43
     }
 }

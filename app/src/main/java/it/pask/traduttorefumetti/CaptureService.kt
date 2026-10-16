@@ -52,7 +52,8 @@ class CaptureService : Service() {
     /** Traduzioni nascoste dal pallino: intanto non leggo e non traduco. */
     @Volatile
     private var paused = false
-    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+    private val prefsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, _ ->
+        if (::ocr.isInitialized) ocr.japaneseOn = p.getBoolean(MainActivity.KEY_JAPANESE, true)
         mainHandler.post { applyLook() }
     }
     private var projection: MediaProjection? = null
@@ -102,7 +103,7 @@ class CaptureService : Service() {
         val prefs = getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
         val apiKey = prefs.getString(MainActivity.KEY_API, "").orEmpty()
         val engine = prefs.getString(MainActivity.KEY_MODEL, PageTranslator.GOOGLE) ?: PageTranslator.GOOGLE
-        if (data == null || (engine != PageTranslator.GOOGLE && apiKey.isBlank())) {
+        if (data == null || (PageTranslator.needsKey(engine) && apiKey.isBlank())) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -113,7 +114,8 @@ class CaptureService : Service() {
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         japanese = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
         ocr = ComicOcr(recognizer, japanese)
-        translator = PageTranslator.create(engine, apiKey)
+        ocr.japaneseOn = prefs.getBoolean(MainActivity.KEY_JAPANESE, true)
+        translator = PageTranslator.create(engine, apiKey, this)
         addOverlay()
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         if (prefs.getBoolean(MainActivity.KEY_BUBBLES, true)) addBubbles()
@@ -156,6 +158,7 @@ class CaptureService : Service() {
                 imageReader?.close()
                 lastBitmap?.recycle()
                 lastBitmap = null
+                if (::translator.isInitialized) runCatching { translator.close() }
                 worker.quitSafely()
             }
         }

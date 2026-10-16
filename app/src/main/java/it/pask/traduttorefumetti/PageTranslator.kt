@@ -13,15 +13,22 @@ interface PageTranslator {
     /** Riga da mostrare nella notifica (token usati), o null se non serve. */
     fun usage(): String? = null
 
+    /** Libera le risorse (es. il modello Gemma in memoria). */
+    fun close() {}
+
     companion object {
         const val GOOGLE = "google-offline"
+        const val GEMMA = "gemma-telefono"
         const val GROQ = "groq"
         const val CLAUDE_HAIKU = "claude-haiku-5-5"
         const val CLAUDE_OPUS = "claude-opus-5-5"
 
-        fun create(engine: String, apiKey: String): PageTranslator =
+        fun needsKey(engine: String) = engine != GOOGLE && engine != GEMMA
+
+        fun create(engine: String, apiKey: String, context: android.content.Context): PageTranslator =
             when (engine) {
                 GOOGLE -> GoogleOfflineTranslator()
+                GEMMA -> GemmaTranslator(context)
                 GROQ -> GroqTranslator(apiKey)
                 else -> ClaudeTranslator(apiKey, engine)
             }
