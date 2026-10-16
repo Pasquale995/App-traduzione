@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.13)
+# Mercurio, traduttore di fumetti (prototipo 0.14)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 

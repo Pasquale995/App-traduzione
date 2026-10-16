@@ -115,7 +115,7 @@ class CaptureService : Service() {
         japanese = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
         ocr = ComicOcr(recognizer, japanese)
         ocr.japaneseOn = prefs.getBoolean(MainActivity.KEY_JAPANESE, true)
-        translator = PageTranslator.create(engine, apiKey, this)
+        translator = PageTranslator.create(engine, apiKey, this) { updateNotification(it) }
         addOverlay()
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         if (prefs.getBoolean(MainActivity.KEY_BUBBLES, true)) addBubbles()

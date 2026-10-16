@@ -25,10 +25,12 @@ interface PageTranslator {
 
         fun needsKey(engine: String) = engine != GOOGLE && engine != GEMMA
 
-        fun create(engine: String, apiKey: String, context: android.content.Context): PageTranslator =
+        fun create(
+            engine: String, apiKey: String, context: android.content.Context, status: (String) -> Unit = {},
+        ): PageTranslator =
             when (engine) {
                 GOOGLE -> GoogleOfflineTranslator()
-                GEMMA -> GemmaTranslator(context)
+                GEMMA -> GemmaTranslator(context, status)
                 GROQ -> GroqTranslator(apiKey)
                 else -> ClaudeTranslator(apiKey, engine)
             }

@@ -12,7 +12,10 @@ import java.io.File
  * a parte e si sceglie dalle impostazioni; Mercurio lo copia in [modelFile].
  * Se il modello manca o non parte, usa il traduttore offline di Google.
  */
-class GemmaTranslator(private val context: Context) : PageTranslator {
+class GemmaTranslator(
+    private val context: Context,
+    private val status: (String) -> Unit = {},
+) : PageTranslator {
 
     private val fallback = GoogleOfflineTranslator()
     private var llm: LlmInference? = null
@@ -20,6 +23,7 @@ class GemmaTranslator(private val context: Context) : PageTranslator {
     private var lastNote: String? = null
     private var pages = 0
     private var lastMs = 0L
+    private var loadNote: String? = null
 
     private val cache = object : LinkedHashMap<String, String>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 3000
@@ -44,9 +48,9 @@ class GemmaTranslator(private val context: Context) : PageTranslator {
                 if (missing.isNotEmpty()) {
                     fallback.translate(missing).forEachIndexed { i, t -> cache[missing[i]] = t }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.w("TraduttoreFumetti", "Gemma non ha risposto, uso Google offline", e)
-                lastNote = "Gemma non ha risposto: uso Google offline"
+                lastNote = "Gemma non ha risposto (${short(e)}): uso Google offline"
                 return offline(texts, todo)
             }
         }
@@ -68,20 +72,28 @@ class GemmaTranslator(private val context: Context) : PageTranslator {
             lastNote = "manca il modello Gemma (impostazioni): uso Google offline"
             return null
         }
+        status("Carico Gemma (${file.length() / 1_000_000} MB): la prima volta può volerci un minuto…")
+        val errors = ArrayList<String>()
         for (backend in listOf(LlmInference.Backend.GPU, LlmInference.Backend.CPU)) {
             try {
+                val start = System.currentTimeMillis()
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(file.absolutePath)
                     .setMaxTokens(MAX_TOKENS)
                     .setPreferredBackend(backend)
                     .build()
-                return LlmInference.createFromOptions(context, options).also { llm = it }
+                return LlmInference.createFromOptions(context, options).also {
+                    llm = it
+                    loadNote = "Gemma caricato su $backend in ${(System.currentTimeMillis() - start) / 1000}s"
+                    status(loadNote!!)
+                }
             } catch (e: Throwable) {
                 Log.w("TraduttoreFumetti", "Gemma non parte con $backend", e)
+                errors += "$backend: ${short(e)}"
             }
         }
         failed = true
-        lastNote = "Gemma non parte su questo telefono: uso Google offline"
+        lastNote = "Gemma non parte (${errors.joinToString("; ")}): uso Google offline"
         return null
     }
 
@@ -117,6 +129,28 @@ class GemmaTranslator(private val context: Context) : PageTranslator {
 
     companion object {
         private const val MAX_TOKENS = 2048
+
+        private fun short(e: Throwable) = (e.message ?: e.javaClass.simpleName).lineSequence().first().take(160)
+
+        /** Prova dalle impostazioni: carica il modello e traduce una frase, riportando tempi o errore. */
+        fun selfTest(context: Context): String {
+            val t = GemmaTranslator(context)
+            return try {
+                val model = t.engine() ?: return t.lastNote ?: "Gemma non parte"
+                val start = System.currentTimeMillis()
+                val out = t.request(model, listOf(SAMPLE))
+                val secs = (System.currentTimeMillis() - start) / 1000.0
+                val text = out[1]
+                if (text.isNullOrBlank()) "${t.loadNote}. Ha risposto in modo strano in ${secs}s"
+                else "${t.loadNote}. Frase tradotta in ${secs}s:\n«$text»"
+            } catch (e: Throwable) {
+                "Errore: ${short(e)}"
+            } finally {
+                t.close()
+            }
+        }
+
+        private const val SAMPLE = "DAMN... TOP RANKERS HAVE CONNECTIONS WITH GOVERNMENTS TOO."
 
         fun modelFile(context: Context) = File(context.filesDir, "gemma.task")
 

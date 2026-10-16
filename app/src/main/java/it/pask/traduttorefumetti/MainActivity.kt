@@ -85,6 +85,26 @@ class MainActivity : Activity() {
             }
         })
         refreshGemma()
+        val gemmaTest = label("")
+        root.addView(Button(this).apply {
+            text = "Prova Gemma (traduce una frase di prova)"
+            setOnClickListener {
+                if (copying || !GemmaTranslator.modelFile(this@MainActivity).exists()) {
+                    gemmaTest.text = "Prima scegli il file del modello"
+                    return@setOnClickListener
+                }
+                isEnabled = false
+                gemmaTest.text = "Provo Gemma… può volerci un minuto"
+                Thread {
+                    val result = GemmaTranslator.selfTest(this@MainActivity)
+                    runOnUiThread {
+                        gemmaTest.text = result
+                        isEnabled = true
+                    }
+                }.start()
+            }
+        })
+        root.addView(gemmaTest)
 
         root.addView(label("Chiave API: gratuita da console.groq.com per Groq, oppure Anthropic per Claude"))
         keyField = EditText(this).apply {
