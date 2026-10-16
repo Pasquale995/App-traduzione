@@ -24,6 +24,7 @@ class GroqTranslator(private val apiKey: String, private val pcAddress: String? 
     private var model: String? = null
     private var lastNote: String? = null
     private var tokens = 0L
+    private var lastRaw = ""
 
     private val cache = object : LinkedHashMap<String, String>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 3000
@@ -56,7 +57,7 @@ class GroqTranslator(private val apiKey: String, private val pcAddress: String? 
     /** Una frase senza ripiego su Google: per il pulsante di prova (gli errori arrivano a chi chiama). */
     fun tryOne(text: String): String {
         val r = request(listOf(text))[1]
-        return if (r.isNullOrBlank()) throw IllegalStateException("risposta vuota") else r
+        return if (r.isNullOrBlank()) throw IllegalStateException("risposta strana: «${lastRaw.take(200)}»") else r
     }
 
     private fun isExplainedSound(t: String) = t.endsWith(")") && t.contains(" (") && t.substringBefore(" (").none { it.isLowerCase() }
@@ -75,13 +76,19 @@ class GroqTranslator(private val apiKey: String, private val pcAddress: String? 
         val text = json.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
             .replace(Regex("(?s)<think>.*?</think>"), "")
 
+        lastRaw = text
         val out = HashMap<Int, String>()
+        var next = 1
         for (line in text.lines()) {
             val sep = line.indexOf('|')
             if (sep <= 0) continue
-            val n = line.substring(0, sep).trim().trimStart('`').toIntOrNull() ?: continue
+            // Alcuni modelli (es. Gemma) scrivono letteralmente "N|": in quel caso vado in ordine.
+            val n = line.substring(0, sep).trim().trim('`', '*').toIntOrNull() ?: next
             out[n] = line.substring(sep + 1).trim()
+            next = n + 1
         }
+        // Un solo testo e nessun "N|": prendo tutta la risposta.
+        if (out.isEmpty() && texts.size == 1 && text.isNotBlank()) out[1] = text.trim().trim('`')
         return out
     }
 
@@ -146,7 +153,7 @@ class GroqTranslator(private val apiKey: String, private val pcAddress: String? 
             Input: one text block per line as `N|text`, in reading order, all from the same page; use the other blocks as context.
             The text comes from OCR: it may be ALL CAPS, broken across lines, or contain small recognition errors. Fix those silently.
             Write natural, faithful Italian as a good Italian comics translator would: keep tone, slang, jokes and emphasis; adapt sound effects to Italian conventions; use normal sentence case.
-            Output exactly one line per block as `N|translation` and nothing else. If a line is not real text (OCR noise, page numbers, logos, app buttons), output `N|`.
+            Output exactly one line per block with the same number, like `1|translation`, `2|translation`, and nothing else. If a line is not real text (OCR noise, page numbers, logos, app buttons), output `N|`.
         """.trimIndent()
     }
 }
