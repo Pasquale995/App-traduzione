@@ -109,8 +109,8 @@ class MainActivity : Activity() {
         })
         root.addView(gemmaTest)
         root.addView(CheckBox(this).apply {
-            text = "Gemma usa la GPU (più veloce). Spegnilo se Gemma si blocca"
-            isChecked = prefs.getBoolean(KEY_GEMMA_GPU, true)
+            text = "Gemma usa la GPU (sperimentale: su alcuni telefoni traduce male o si blocca)"
+            isChecked = prefs.getBoolean(KEY_GEMMA_GPU, false)
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(KEY_GEMMA_GPU, on).apply() }
         })
 

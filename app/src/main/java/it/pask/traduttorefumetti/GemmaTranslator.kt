@@ -74,9 +74,9 @@ class GemmaTranslator(
             return null
         }
         val errors = ArrayList<String>()
-        // Di base la GPU (più veloce); se non parte, il processore (CPU).
+        // Di base il processore (CPU): su alcuni telefoni (es. OnePlus Nord 6) la GPU scrive spazzatura.
         val gpu = context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
-            .getBoolean(MainActivity.KEY_GEMMA_GPU, true)
+            .getBoolean(MainActivity.KEY_GEMMA_GPU, false)
         val backends = if (gpu) listOf(LlmInference.Backend.GPU, LlmInference.Backend.CPU) else listOf(LlmInference.Backend.CPU)
         for (backend in backends) {
             status("Carico Gemma su ${if (backend == LlmInference.Backend.GPU) "GPU" else "CPU"}…")
@@ -121,11 +121,14 @@ class GemmaTranslator(
         }
         lastRaw = text
         val out = HashMap<Int, String>()
+        var next = 1
         for (line in text.substringBefore("<end_of_turn>").lines()) {
             val sep = line.indexOf('|')
             if (sep <= 0) continue
-            val n = line.substring(0, sep).trim().trimStart('`', '*').toIntOrNull() ?: continue
+            // A volte Gemma scrive letteralmente "N|": in quel caso vado in ordine.
+            val n = line.substring(0, sep).trim().trim('`', '*').toIntOrNull() ?: next
             out[n] = line.substring(sep + 1).trim()
+            next = n + 1
         }
         return out
     }
@@ -169,7 +172,7 @@ class GemmaTranslator(
             Translate this English or Japanese comic book text into natural Italian.
             Input: one text block per line as `N|text`, all from the same page. The text comes from OCR and may be ALL CAPS or slightly wrong: fix it silently.
             Keep tone, slang and jokes. Use normal sentence case.
-            Answer with exactly one line per block as `N|translation` and nothing else.
+            Answer with exactly one line per block, with the same number: `1|translation`, `2|translation`... and nothing else.
 
         """.trimIndent() + "\n"
     }
