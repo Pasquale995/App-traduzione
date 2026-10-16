@@ -95,8 +95,11 @@ class MainActivity : Activity() {
                 }
                 isEnabled = false
                 gemmaTest.text = "Provo Gemma… può volerci un minuto"
+                val t0 = System.currentTimeMillis()
                 Thread {
-                    val result = GemmaTranslator.selfTest(this@MainActivity)
+                    val result = GemmaTranslator.selfTest(this@MainActivity) { step ->
+                        runOnUiThread { gemmaTest.text = "$step (${(System.currentTimeMillis() - t0) / 1000}s)" }
+                    }
                     runOnUiThread {
                         gemmaTest.text = result
                         isEnabled = true
@@ -105,6 +108,11 @@ class MainActivity : Activity() {
             }
         })
         root.addView(gemmaTest)
+        root.addView(CheckBox(this).apply {
+            text = "Gemma usa la GPU (più veloce). Spegnilo se Gemma si blocca"
+            isChecked = prefs.getBoolean(KEY_GEMMA_GPU, true)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(KEY_GEMMA_GPU, on).apply() }
+        })
 
         root.addView(label("Chiave API: gratuita da console.groq.com per Groq, oppure Anthropic per Claude"))
         keyField = EditText(this).apply {
@@ -282,6 +290,7 @@ class MainActivity : Activity() {
         const val KEY_OPACITY = "opacity"
         const val KEY_BUBBLES = "bubbles"
         const val KEY_JAPANESE = "japanese"
+        const val KEY_GEMMA_GPU = "gemma_gpu"
         private const val REQUEST_CAPTURE = 42
         private const val REQUEST_MODEL = 43
     }

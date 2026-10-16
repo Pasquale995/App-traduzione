@@ -24,6 +24,7 @@ class GemmaTranslator(
     private var pages = 0
     private var lastMs = 0L
     private var loadNote: String? = null
+    private var lastRaw = ""
 
     private val cache = object : LinkedHashMap<String, String>(256, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 3000
@@ -72,9 +73,13 @@ class GemmaTranslator(
             lastNote = "manca il modello Gemma (impostazioni): uso Google offline"
             return null
         }
-        status("Carico Gemma (${file.length() / 1_000_000} MB): la prima volta può volerci un minuto…")
         val errors = ArrayList<String>()
-        for (backend in listOf(LlmInference.Backend.GPU, LlmInference.Backend.CPU)) {
+        // Di base la GPU (più veloce); se non parte, il processore (CPU).
+        val gpu = context.getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
+            .getBoolean(MainActivity.KEY_GEMMA_GPU, true)
+        val backends = if (gpu) listOf(LlmInference.Backend.GPU, LlmInference.Backend.CPU) else listOf(LlmInference.Backend.CPU)
+        for (backend in backends) {
+            status("Carico Gemma su ${if (backend == LlmInference.Backend.GPU) "GPU" else "CPU"}…")
             try {
                 val start = System.currentTimeMillis()
                 val options = LlmInference.LlmInferenceOptions.builder()
@@ -105,13 +110,18 @@ class GemmaTranslator(
         // Una sessione nuova per pagina: Gemma non si porta dietro le pagine precedenti.
         val session = LlmInferenceSession.createFromOptions(model, options)
         val text = try {
-            session.addQueryChunk(PROMPT + texts.mapIndexed { i, t -> "${i + 1}|$t" }.joinToString("\n"))
+            // Formato di conversazione di Gemma: senza, il modello non sa quando fermarsi e scrive a vuoto.
+            session.addQueryChunk(
+                "<start_of_turn>user\n" + PROMPT + texts.mapIndexed { i, t -> "${i + 1}|$t" }.joinToString("\n") +
+                    "<end_of_turn>\n<start_of_turn>model\n"
+            )
             session.generateResponse()
         } finally {
             session.close()
         }
+        lastRaw = text
         val out = HashMap<Int, String>()
-        for (line in text.lines()) {
+        for (line in text.substringBefore("<end_of_turn>").lines()) {
             val sep = line.indexOf('|')
             if (sep <= 0) continue
             val n = line.substring(0, sep).trim().trimStart('`', '*').toIntOrNull() ?: continue
@@ -128,20 +138,21 @@ class GemmaTranslator(
     private fun isExplainedSound(t: String) = t.endsWith(")") && t.contains(" (") && t.substringBefore(" (").none { it.isLowerCase() }
 
     companion object {
-        private const val MAX_TOKENS = 2048
+        private const val MAX_TOKENS = 1536
 
         private fun short(e: Throwable) = (e.message ?: e.javaClass.simpleName).lineSequence().first().take(160)
 
         /** Prova dalle impostazioni: carica il modello e traduce una frase, riportando tempi o errore. */
-        fun selfTest(context: Context): String {
-            val t = GemmaTranslator(context)
+        fun selfTest(context: Context, progress: (String) -> Unit): String {
+            val t = GemmaTranslator(context, progress)
             return try {
                 val model = t.engine() ?: return t.lastNote ?: "Gemma non parte"
+                progress("${t.loadNote}. Ora traduco la frase di prova…")
                 val start = System.currentTimeMillis()
                 val out = t.request(model, listOf(SAMPLE))
                 val secs = (System.currentTimeMillis() - start) / 1000.0
                 val text = out[1]
-                if (text.isNullOrBlank()) "${t.loadNote}. Ha risposto in modo strano in ${secs}s"
+                if (text.isNullOrBlank()) "${t.loadNote}. Ha risposto in modo strano in ${secs}s:\n«${t.lastRaw.take(300)}»"
                 else "${t.loadNote}. Frase tradotta in ${secs}s:\n«$text»"
             } catch (e: Throwable) {
                 "Errore: ${short(e)}"
