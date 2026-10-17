@@ -21,10 +21,8 @@ interface PageTranslator {
         const val GEMMA = "gemma-telefono"
         const val GROQ = "groq"
         const val PC = "pc-ollama"
-        const val CLAUDE_HAIKU = "claude-haiku-5-5"
-        const val CLAUDE_OPUS = "claude-opus-5-5"
 
-        fun needsKey(engine: String) = engine != GOOGLE && engine != GEMMA && engine != PC
+        fun needsKey(engine: String) = engine == GROQ
 
         fun create(
             engine: String, apiKey: String, context: android.content.Context, status: (String) -> Unit = {},
@@ -40,7 +38,8 @@ interface PageTranslator {
                         it.getString(MainActivity.KEY_PC_MODEL, ""),
                     )
                 }
-                else -> ClaudeTranslator(apiKey, engine)
+                // Anche le vecchie scelte (Claude, tolto dalla 0.21) tornano a Google offline.
+                else -> GoogleOfflineTranslator()
             }
     }
 }

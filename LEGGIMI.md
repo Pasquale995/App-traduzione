@@ -1,4 +1,4 @@
-# Mercurio, traduttore di fumetti (prototipo 0.20)
+# Mercurio, traduttore di fumetti (prototipo 0.21)
 
 App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo schermo e ci disegna sopra la traduzione italiana. Gratis: lavora tutto sul telefono.
 
@@ -11,12 +11,10 @@ App Android che legge i balloon in inglese (e il giapponese, kanji e kana) sullo
 
 Per una traduzione più naturale puoi scegliere **LLM open source via Groq**: gratis, serve solo una chiave da https://console.groq.com (API Keys → Create API Key). Riceve solo il testo letto sul telefono, una richiesta per pagina; se finisci il limite giornaliero gratuito o manca internet, l'app torna da sola al traduttore offline di Google.
 
-In più puoi scegliere Claude come traduttore, più fedele e naturale ma a pagamento (serve una chiave API Anthropic con credito prepagato, separata dall'abbonamento a Claude).
 
 ## Cosa ti serve
 
 - Un telefono Android 8.0 o più recente, a 64 bit (quasi tutti quelli degli ultimi anni).
-- Solo per Claude: una chiave API da https://console.anthropic.com.
 
 ## Come ottenere l'APK
 
@@ -39,7 +37,7 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 
 ## Limiti noti di questo prototipo
 
-- La traduzione di Google offline è più letterale di quella di Claude, soprattutto con slang e giochi di parole.
+- La traduzione di Google offline è più letterale di quella di un LLM (Gemma, Groq), soprattutto con slang e giochi di parole.
 - Le scritte a mano molto stilizzate possono sfuggire all'OCR, soprattutto i suoni giapponesi disegnati a mano.
 - La traduzione dal giapponese di Google offline è meno precisa di quella dall'inglese.
 - Traduce anche testo inglese che non sta nei balloon (menu dell'app, titoli).
@@ -51,7 +49,6 @@ L'APK si compila con Gradle, perché le librerie ML Kit si scaricano dai server 
 
 - `app/src/main/java/.../CaptureService.kt`: cattura, rilevamento del cambio pagina, OCR, overlay.
 - `app/src/main/java/.../PageTranslator.kt`: scelta del traduttore e traduttore offline di Google.
-- `app/src/main/java/.../ClaudeTranslator.kt`: traduzione con Claude (opzionale).
 - `app/src/main/java/.../OverlayView.kt`: disegno dei riquadri tradotti.
 - `app/src/main/java/.../MainActivity.kt`: schermata delle impostazioni.
 

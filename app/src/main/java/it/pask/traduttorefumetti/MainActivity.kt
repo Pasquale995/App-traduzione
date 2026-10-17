@@ -57,8 +57,6 @@ class MainActivity : Activity() {
             PageTranslator.GEMMA to "Gemma sul telefono (sperimentale: gratis e offline, serve il file del modello)",
             PageTranslator.PC to "Gemma sul mio PC (gratis: Ollama sul PC, stessa rete Wi-Fi)",
             PageTranslator.GROQ to "LLM open source via Groq (gratis con chiave, traduzione più naturale)",
-            PageTranslator.CLAUDE_HAIKU to "Claude Haiku 5.5 (a pagamento, serve la chiave API)",
-            PageTranslator.CLAUDE_OPUS to "Claude Opus 5.5 (a pagamento, traduzione migliore)",
         )
         val saved = prefs.getString(KEY_MODEL, PageTranslator.GOOGLE)
         modelGroup = RadioGroup(this).apply {
@@ -116,9 +114,9 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(KEY_GEMMA_GPU, on).apply() }
         })
 
-        root.addView(label("Chiave API: gratuita da console.groq.com per Groq, oppure Anthropic per Claude"))
+        root.addView(label("Chiave API di Groq (gratuita da console.groq.com)"))
         keyField = EditText(this).apply {
-            hint = "gsk_… oppure sk-ant-…"
+            hint = "gsk_…"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setText(prefs.getString(KEY_API, ""))
         }

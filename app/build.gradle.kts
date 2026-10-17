@@ -11,8 +11,8 @@ android {
         applicationId = "it.pask.traduttorefumetti"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.20"
+        versionCode = 21
+        versionName = "0.21"
         // Solo telefoni a 64 bit: l'APK pesa molto meno
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -54,6 +54,4 @@ dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
     // Gemma sul telefono (sperimentale): motore LLM di Google MediaPipe, offline
     implementation("com.google.mediapipe:tasks-genai:0.10.24")
-    // SDK ufficiale Anthropic per chiamare Claude (opzionale, a pagamento)
-    implementation("com.anthropic:anthropic-java:2.71.0")
 }
