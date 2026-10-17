@@ -83,6 +83,7 @@ class GroqTranslator(
 
     private fun request(texts: List<String>): Map<Int, String> {
         val m = model ?: chooseModel().also { model = it }
+        if (m.contains("translategemma")) return translateGemma(m, texts)
         val body = JSONObject()
             .put("model", m)
             .put("temperature", 0.3)
@@ -111,6 +112,34 @@ class GroqTranslator(
         return out
     }
 
+    /**
+     * TranslateGemma è fatto solo per tradurre e vuole il suo prompt fisso, un testo alla volta:
+     * niente formato "N|", ogni balloon è una richiesta (sulla scheda video è veloce).
+     */
+    private fun translateGemma(m: String, texts: List<String>): Map<Int, String> {
+        val out = HashMap<Int, String>()
+        texts.forEachIndexed { i, src ->
+            val (lang, code) = if (TextCleaner.isJapanese(src)) "Japanese" to "ja" else "English" to "en"
+            val text = if (code == "en") GoogleOfflineTranslator.sentenceCase(src) else src
+            val prompt = "You are a professional $lang ($code) to Italian (it) translator. " +
+                "Your goal is to accurately convey the meaning and nuances of the original $lang text " +
+                "while adhering to Italian grammar, vocabulary, and cultural sensitivities.\n" +
+                "Produce only the Italian translation, without any additional explanations or commentary. " +
+                "Please translate the following $lang text into Italian:\n\n\n$text"
+            val body = JSONObject()
+                .put("model", m)
+                .put("temperature", 0.2)
+                .put("max_tokens", 600)
+                .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+            val json = JSONObject(call("chat/completions", body.toString()))
+            json.optJSONObject("usage")?.let { tokens += it.optLong("total_tokens") }
+            val answer = json.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+            lastRaw = answer
+            out[i + 1] = answer.trim().trim('"', '«', '»').trim()
+        }
+        return out
+    }
+
     /** Sceglie il miglior modello disponibile sul conto gratuito (i nomi cambiano nel tempo). */
     private fun chooseModel(): String {
         val ids = JSONObject(call("models", null)).getJSONArray("data").let { a ->
@@ -118,7 +147,7 @@ class GroqTranslator(
         }
         if (pcAddress != null) {
             // Sul PC uso il Gemma scaricato con Ollama (se ce ne sono più, il primo).
-            return ids.firstOrNull { it.contains("gemma") } ?: ids.firstOrNull()
+            return ids.firstOrNull { it.contains("translategemma") } ?: ids.firstOrNull { it.contains("gemma") } ?: ids.firstOrNull()
                 ?: throw IllegalStateException("Sul PC non c'è nessun modello: lancia 'ollama pull gemma3:4b'")
         }
         PREFERRED.firstOrNull { it in ids }?.let { return it }

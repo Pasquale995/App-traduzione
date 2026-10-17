@@ -67,12 +67,7 @@ class OverlayView(context: Context) : View(context) {
         val pad = 4 * density
         for (item in items) {
             if (item.text.isBlank()) continue
-            val box = RectF(item.box).apply { inset(-pad, -pad) }
-            val innerWidth = (box.width() - 2 * pad).toInt().coerceAtLeast(20)
-            val layout = fitText(item.text, innerWidth, box.height() - 2 * pad)
-            // Se il testo italiano è più lungo, il riquadro si allunga verso il basso.
-            val neededHeight = layout.height + 2 * pad
-            if (neededHeight > box.height()) box.bottom = box.top + neededHeight
+            val (box, layout) = place(item)
             drawn.add(Rect(box.left.toInt(), box.top.toInt(), box.right.toInt(), box.bottom.toInt()))
             val r = 8 * density
             canvas.drawRoundRect(box, r, r, bgPaint)
@@ -85,6 +80,21 @@ class OverlayView(context: Context) : View(context) {
         canvas.restore()
         drawnRects = drawn
     }
+
+    /** Riquadro (coordinate schermo) e testo impaginato di un balloon. */
+    private fun place(item: Item): Pair<RectF, StaticLayout> {
+        val pad = 4 * density
+        val box = RectF(item.box).apply { inset(-pad, -pad) }
+        val innerWidth = (box.width() - 2 * pad).toInt().coerceAtLeast(20)
+        val layout = fitText(item.text, innerWidth, box.height() - 2 * pad)
+        // Se il testo italiano è più lungo, il riquadro si allunga verso il basso.
+        val neededHeight = layout.height + 2 * pad
+        if (neededHeight > box.height()) box.bottom = box.top + neededHeight
+        return box to layout
+    }
+
+    /** Dove verrà disegnato un balloon, per creargli una finestra su misura. */
+    fun rectFor(item: Item): Rect = place(item).first.let { Rect(it.left.toInt(), it.top.toInt(), it.right.toInt() + 1, it.bottom.toInt() + 1) }
 
     /** Sceglie la dimensione del testo più grande che entra nel balloon. */
     private fun fitText(text: String, width: Int, maxHeight: Float): StaticLayout {

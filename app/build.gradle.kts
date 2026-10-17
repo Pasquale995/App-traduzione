@@ -11,8 +11,8 @@ android {
         applicationId = "it.pask.traduttorefumetti"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "0.19"
+        versionCode = 20
+        versionName = "0.20"
         // Solo telefoni a 64 bit: l'APK pesa molto meno
         ndk { abiFilters += "arm64-v8a" }
     }

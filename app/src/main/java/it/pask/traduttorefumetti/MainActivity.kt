@@ -219,7 +219,7 @@ class MainActivity : Activity() {
             })
         }
         slider("Dimensione del testo", KEY_TEXT_SIZE, 100, 60, 160, "%")
-        slider("Opacità dei riquadri", KEY_OPACITY, 80, 20, 80, "% (massimo 80: oltre, Android blocca il dito)")
+        slider("Opacità dei riquadri", KEY_OPACITY, 80, 20, 100, "% (oltre 80, se il dito parte da una traduzione la pagina non scorre)")
         root.addView(CheckBox(this).apply {
             text = "Mostra i pallini: Mercurio (tocca per fermare) e fumetto (mostra/nascondi traduzioni)"
             isChecked = prefs.getBoolean(KEY_BUBBLES, true)

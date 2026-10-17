@@ -48,6 +48,7 @@ class CaptureService : Service() {
     private lateinit var windowManager: WindowManager
     private var overlay: OverlayView? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    private var solid: SolidBalloons? = null
     private var bubbles: ControlBubbles? = null
     /** Traduzioni nascoste dal pallino: intanto non leggo e non traduco. */
     @Volatile
@@ -166,6 +167,8 @@ class CaptureService : Service() {
         projection = null
         overlay?.let { runCatching { windowManager.removeView(it) } }
         overlay = null
+        solid?.clear()
+        solid = null
         bubbles?.remove()
         bubbles = null
         getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
@@ -206,7 +209,7 @@ class CaptureService : Service() {
                 val before = shown ?: return
                 if (fresh != null && sig.difference(before, maskRects()) > CHANGE_THRESHOLD) {
                     // Pagina cambiata o scorrimento: tolgo le traduzioni vecchie e aspetto che si fermi.
-                    mainHandler.post { overlay?.clear() }
+                    mainHandler.post { clearTranslations() }
                     shownBoxes = emptyList()
                     state = State.WAITING
                     previous = sig
@@ -256,7 +259,7 @@ class CaptureService : Service() {
             .filter { it.second.isNotBlank() }
             .map { (b, t) -> OverlayView.Item(Rect(b.first), t) }
         shownBoxes = items.map { Rect(it.box) }
-        mainHandler.post { overlay?.show(items) }
+        mainHandler.post { showTranslations(items) }
         translatedPages++
         updateNotification(
             "Pagine tradotte: $translatedPages" + (translator.usage()?.let { " · $it" } ?: "")
@@ -290,7 +293,7 @@ class CaptureService : Service() {
 
     /** Zone da ignorare nel confronto: i nostri riquadri, un po' allargati. */
     private fun maskRects(): List<Rect> {
-        val drawn = overlay?.drawnRects.orEmpty()
+        val drawn = overlay?.drawnRects.orEmpty() + solid?.drawnRects.orEmpty()
         val margin = (screen.y * 0.02f).toInt()
         val controls = bubbles?.screenRect?.takeIf { !it.isEmpty }
         return (shownBoxes + drawn + listOfNotNull(controls)).map { Rect(it).apply { inset(-margin, -margin) } }
@@ -331,7 +334,7 @@ class CaptureService : Service() {
         virtualDisplay?.surface = reader.surface
         imageReader = reader
         old?.close()
-        mainHandler.post { overlay?.clear() }
+        mainHandler.post { clearTranslations() }
         shownBoxes = emptyList()
         previous = null
         state = State.WAITING
@@ -374,7 +377,29 @@ class CaptureService : Service() {
         windowManager.addView(view, params)
         overlay = view
         overlayParams = params
+        solid = SolidBalloons(this, windowManager)
         applyLook()
+    }
+
+    private fun opacity() =
+        (getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE).getInt(MainActivity.KEY_OPACITY, 80) / 100f)
+            .coerceIn(0.2f, 1f)
+
+    /** Fino all'80% una sola finestra a tutto schermo; oltre, una finestra per balloon (vedi SolidBalloons). */
+    private fun showTranslations(items: List<OverlayView.Item>) {
+        val a = opacity()
+        if (a > MAX_ALPHA) {
+            overlay?.clear()
+            solid?.show(items, a, overlay?.textScale ?: 1f)
+        } else {
+            solid?.clear()
+            overlay?.show(items)
+        }
+    }
+
+    private fun clearTranslations() {
+        overlay?.clear()
+        solid?.clear()
     }
 
     /** Applica opacità dei riquadri e dimensione del testo scelte nelle impostazioni. */
@@ -382,7 +407,8 @@ class CaptureService : Service() {
         val prefs = getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
         val view = overlay ?: return
         val params = overlayParams ?: return
-        params.alpha = (prefs.getInt(MainActivity.KEY_OPACITY, 80) / 100f).coerceIn(0.2f, MAX_ALPHA)
+        params.alpha = opacity().coerceAtMost(MAX_ALPHA)
+        if (opacity() > MAX_ALPHA) solid?.setAlpha(opacity())
         view.textScale = prefs.getInt(MainActivity.KEY_TEXT_SIZE, 100) / 100f
         runCatching { windowManager.updateViewLayout(view, params) }
     }
@@ -400,8 +426,9 @@ class CaptureService : Service() {
     /** Pallino "fumetto": nasconde le traduzioni e mette in pausa; riaccendendo rilegge la pagina. */
     private fun setTranslationsVisible(visible: Boolean) {
         overlay?.visibility = if (visible) android.view.View.VISIBLE else android.view.View.GONE
+        solid?.setVisible(visible)
         if (visible) {
-            mainHandler.post { overlay?.clear() }
+            mainHandler.post { clearTranslations() }
             handler.post {
                 paused = false
                 shownBoxes = emptyList()
