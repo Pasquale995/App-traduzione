@@ -1,4 +1,5 @@
 export const PREDEFINITE = {
+  motore: 'mercurio', // 'mercurio' = Mercurio Motore sul PC (si accende da solo), 'ollama' = Ollama
   ollama: 'http://localhost:11434',
   modello: '',      // vuoto = automatico (preferisce TranslateGemma)
   opacita: 100,     // percentuale

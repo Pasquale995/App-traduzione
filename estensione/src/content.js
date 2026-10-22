@@ -322,6 +322,7 @@ chrome.runtime.onMessage.addListener(msg => {
   if (msg?.to !== 'pagina') return;
   if (msg.type === 'ritraduci') { if (on) retranslateAll(); if (mode === 'novel') novel?.restart(); }
   if (msg.type === 'acceso') setMode(msg.mode);
+  if (msg.type === 'stato' && mode) stato(msg.testo, 'lavoro');
 });
 
 chrome.storage.sync.get(PREDEFINITE).then(async v => {

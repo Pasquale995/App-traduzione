@@ -3,7 +3,7 @@ name: Compila APK
 on:
   push:
     branches: [main]
-    paths-ignore: ["estensione/**"]
+    paths-ignore: ["estensione/**", "motore/**"]
   workflow_dispatch:
 
 permissions:

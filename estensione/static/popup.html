@@ -15,22 +15,29 @@
   .tasti { display: flex; gap: 8px; }
   button.grande { margin: 0 0 4px; padding: 11px 6px; font-size: 14px; background: #2e9e5b; }
   button.grande.acceso { background: #3a3642; }
+  .nota { margin-top: 6px; color: #aaa; font-size: 12px; }
+  .nota a { color: #ff6b8a; }
   #esito { margin-top: 10px; white-space: pre-wrap; color: #ccc; min-height: 1em; }
 </style>
 </head>
 <body>
   <h1><img src="icone/48.png" alt="">Mercurio</h1>
   <div class="tasti"><button id="fumetto" class="grande">Leggi fumetto</button><button id="novel" class="grande">Leggi novel</button></div>
+  <label for="motore">Motore di traduzione</label>
+  <select id="motore"><option value="mercurio">Mercurio Motore (si accende da solo)</option><option value="ollama">Ollama</option></select>
+  <div id="soloMercurio" class="nota">Non ce l'hai? <a href="https://github.com/Pasquale995/App-traduzione/raw/scarica/MercurioMotore.exe" target="_blank">Scarica MercurioMotore.exe</a> e aprilo una volta.</div>
+  <div id="soloOllama">
   <label for="ollama">Indirizzo di Ollama</label>
   <input type="text" id="ollama" placeholder="http://localhost:11434">
   <label for="modello">Modello</label>
   <select id="modello"><option value="">Automatico (TranslateGemma se c'è)</option></select>
+  </div>
   <div class="riga" style="margin-top:10px"><label for="intera" style="margin:0">Traduci la pagina intera in una volta</label><input type="checkbox" id="intera"></div>
   <label for="opacita">Riquadri: opacità <span id="opacitaV"></span>%</label>
   <input type="range" id="opacita" min="20" max="100" step="5">
   <label for="testo">Grandezza del testo <span id="testoV"></span>%</label>
   <input type="range" id="testo" min="60" max="160" step="10">
-  <button id="prova">Prova Ollama</button>
+  <button id="prova">Prova il motore</button>
   <button id="ritraduci" class="secondario">Traduci di nuovo questa pagina</button>
   <div id="esito"></div>
   <script src="popup.js"></script>

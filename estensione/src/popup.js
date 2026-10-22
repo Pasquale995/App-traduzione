@@ -1,4 +1,4 @@
-// Finestrella dell'icona: impostazioni e prova di Ollama.
+// Finestrella dell'icona: impostazioni e prova del motore (Mercurio Motore o Ollama).
 import { PREDEFINITE } from './impostazioni.js';
 
 const $ = id => document.getElementById(id);
@@ -18,10 +18,21 @@ async function loadModels(current) {
 async function init() {
   const cfg = { ...PREDEFINITE, ...(await chrome.storage.sync.get(PREDEFINITE)) };
   $('ollama').value = cfg.ollama;
+  $('motore').value = cfg.motore;
+  const showMotore = () => {
+    $('soloOllama').style.display = $('motore').value === 'ollama' ? '' : 'none';
+    $('soloMercurio').style.display = $('motore').value === 'mercurio' ? '' : 'none';
+  };
+  showMotore();
+  $('motore').onchange = async () => {
+    await chrome.storage.sync.set({ motore: $('motore').value });
+    showMotore();
+    if ($('motore').value === 'ollama') loadModels($('modello').value);
+  };
   $('intera').checked = cfg.intera;
   $('intera').onchange = () => chrome.storage.sync.set({ intera: $('intera').checked });
   for (const k of ['opacita', 'testo']) { $(k).value = cfg[k]; $(k + 'V').textContent = cfg[k]; }
-  loadModels(cfg.modello);
+  if (cfg.motore === 'ollama') loadModels(cfg.modello);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let mode = (await ask({ type: 'stato', tabId: tab?.id }))?.mode || null;
@@ -51,7 +62,7 @@ async function init() {
     $(k).oninput = () => { $(k + 'V').textContent = $(k).value; chrome.storage.sync.set({ [k]: Number($(k).value) }); };
   }
   $('prova').onclick = async () => {
-    esito('Provo… la prima volta Ollama carica il modello, può volerci un po\'.');
+    esito('Provo… la prima volta il motore carica il modello, può volerci un po\'.');
     const r = await ask({ type: 'prova' });
     esito(r?.error ? r.error : `${r.model} in ${r.secondi}s:\n«${r.it}»`);
   };

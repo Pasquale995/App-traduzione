@@ -1,17 +1,49 @@
 {
   "manifest_version": 3,
   "name": "Mercurio",
-  "version": "0.7",
-  "description": "Traduce in italiano i fumetti in inglese e giapponese mentre li leggi: legge le scritte sul tuo PC e traduce con Ollama.",
-  "icons": { "16": "icone/16.png", "32": "icone/32.png", "48": "icone/48.png", "128": "icone/128.png" },
-  "action": { "default_popup": "popup.html", "default_icon": { "16": "icone/16.png", "32": "icone/32.png" } },
-  "background": { "service_worker": "background.js" },
-  "permissions": ["storage", "offscreen", "tabs"],
-  "host_permissions": ["<all_urls>"],
+  "version": "0.8",
+  "description": "Traduce in italiano fumetti e novel in inglese e giapponese mentre li leggi: legge le scritte sul tuo PC e traduce con Mercurio Motore o Ollama.",
+  "icons": {
+    "16": "icone/16.png",
+    "32": "icone/32.png",
+    "48": "icone/48.png",
+    "128": "icone/128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icone/16.png",
+      "32": "icone/32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "offscreen",
+    "tabs",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "content_scripts": [
-    { "matches": ["<all_urls>"], "js": ["content.js"], "css": ["content.css"], "run_at": "document_idle" }
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA63JlTcgEloYZ8VkIsoJH2DK26o6+zW5uiNqNiWnoOXDVhgLHQdmvmwjYv6vsV86EmXyqpty+85P0MCvVHfE6biOEHyF5g2MlfIp1cUJPOywQecy571zotXdTqEDJ4+7bNgtbfmiGAPsPS8Q2Xx2VQrth8sGvgyn4m84lBuVXWdreuQpWStugZxydXCn7gdsjVYxdeX6BwHnegGqUTSg5+jzhlijM2uEZM1Zyp1SmOvsaI1oIOp6E9H/Ydr40nFM2OBG03GR7fYj2rbsR4qNpwSaGAFjuYGoKq6vk8TeNPPKIFv/33gMcGJWLAHskqkIZRJiCDHU+TH5zZnDhCeCKFQIDAQAB"
 }

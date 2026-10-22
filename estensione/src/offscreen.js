@@ -71,11 +71,13 @@ async function ollama(cfg, path, body) {
 }
 
 async function models(cfg) {
+  if (cfg.motore === 'mercurio') return [cfg.motoreModello || 'Mercurio Motore'];
   const j = await ollama(cfg, '/api/tags');
   return (j.models || []).map(m => m.name);
 }
 
 async function pickModel(cfg) {
+  if (cfg.motore === 'mercurio') return cfg.motoreModello || 'Mercurio Motore';
   if (cfg.modello) return cfg.modello;
   if (autoModel) return autoModel;
   const names = await models(cfg);
@@ -87,7 +89,7 @@ async function pickModel(cfg) {
 function prompt(model, src, japanese = isJapanese(src)) {
   const [lang, code] = japanese ? ['Japanese', 'ja'] : ['English', 'en'];
   const t = code === 'en' ? sentenceCase(src) : src;
-  if (model.includes('translategemma')) {
+  if (model.toLowerCase().includes('translategemma')) {
     // Il formato fisso con cui Google ha addestrato TranslateGemma.
     return `You are a professional ${lang} (${code}) to Italian (it) translator. Your goal is to accurately convey ` +
       `the meaning and nuances of the original ${lang} text while adhering to Italian grammar, vocabulary, and ` +
@@ -101,17 +103,39 @@ function prompt(model, src, japanese = isJapanese(src)) {
 
 const explainedSound = t => /\)$/.test(t) && t.includes(' (') && !/[a-z]/.test(t.split(' (')[0]);
 
+/** Una domanda al modello: a Mercurio Motore (llama.cpp) o a Ollama. */
+async function chat(cfg, model, content) {
+  if (cfg.motore === 'mercurio') {
+    let res;
+    try {
+      res = await fetch(`http://127.0.0.1:${cfg.motorePorta || 11435}/completion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        // Formato di conversazione di Gemma scritto a mano: non dipende dal template dentro il file del modello.
+        body: JSON.stringify({
+          prompt: `<start_of_turn>user\n${content}<end_of_turn>\n<start_of_turn>model\n`,
+          n_predict: 1536, temperature: 0.2, stop: ['<end_of_turn>'], cache_prompt: true,
+        }),
+      });
+    } catch {
+      throw new Error('Mercurio Motore non risponde');
+    }
+    if (!res.ok) throw new Error(`Mercurio Motore ha risposto ${res.status}: ${(await res.text()).slice(0, 150)}`);
+    return (await res.json()).content || '';
+  }
+  const j = await ollama(cfg, '/api/chat', {
+    model, stream: false, keep_alive: '30m',
+    options: { temperature: 0.2 },
+    messages: [{ role: 'user', content }],
+  });
+  return j.message?.content || '';
+}
+
 async function translate(cfg, src) {
   if (explainedSound(src)) return src;
   const model = await pickModel(cfg);
   const key = model + '\n' + src;
   if (cache.has(key)) return cache.get(key);
-  const j = await ollama(cfg, '/api/chat', {
-    model, stream: false, keep_alive: '30m',
-    options: { temperature: 0.2 },
-    messages: [{ role: 'user', content: prompt(model, src) }],
-  });
-  const out = (j.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim().replace(/^["«]|["»]$/g, '').trim();
+  const out = (await chat(cfg, model, prompt(model, src))).replace(/<think>[\s\S]*?<\/think>/g, '').trim().replace(/^["«]|["»]$/g, '').trim();
   cache.set(key, out);
   return out;
 }
@@ -131,12 +155,7 @@ async function translatePage(cfg, texts, context = []) {
     const ctx = context.filter(t => t && isJapanese(t) === japanese).slice(-3);
     const lines = [...ctx, ...todo.map(([t]) => t)];
     const numbered = lines.map((t, n) => `${n + 1}. ${japanese ? t : sentenceCase(t)}`).join('\n');
-    const j = await ollama(cfg, '/api/chat', {
-      model, stream: false, keep_alive: '30m',
-      options: { temperature: 0.2 },
-      messages: [{ role: 'user', content: prompt(model, numbered, japanese) }],
-    });
-    const raw = (j.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
+    const raw = (await chat(cfg, model, prompt(model, numbered, japanese))).replace(/<think>[\s\S]*?<\/think>/g, '');
     const got = new Map();
     let last = 0;
     for (const line of raw.split('\n')) {
