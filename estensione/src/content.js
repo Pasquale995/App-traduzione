@@ -28,15 +28,32 @@ function enqueue(img) {
   pump();
 }
 
+async function send(msg) {
+  try {
+    return await chrome.runtime.sendMessage(msg);
+  } catch (e) {
+    const m = String(e?.message || e);
+    return { error: /context invalidated/i.test(m) ? 'Mercurio è stato aggiornato: ricarica la pagina (F5)' : m };
+  }
+}
+
 async function pump() {
   if (busy) return;
   busy = true;
-  while (queue.length) {
+  try {
+    while (queue.length) await work();
+  } finally {
+    busy = false;
+  }
+}
+
+async function work() {
+  {
     // Prima quella più vicina a dove sta leggendo.
     queue.sort((a, b) => Math.abs(a.getBoundingClientRect().top) - Math.abs(b.getBoundingClientRect().top));
     const img = queue.shift();
     const d = done.get(img);
-    if (!d || !cfg.attivo) continue;
+    if (!d || !cfg.attivo) return;
     const layer = layerFor(img);
     badge(layer, 'Mercurio: leggo…', false);
     let res;
@@ -44,21 +61,21 @@ async function pump() {
       // Immagini che esistono solo nella pagina (blob:): le passo io.
       const local = d.src.startsWith('blob:') || d.src.startsWith('data:');
       res = local
-        ? await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src, data: await fromPage(d.src) })
-        : await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src });
+        ? await send({ to: 'background', type: 'pagina', src: d.src, data: await fromPage(d.src) })
+        : await send({ to: 'background', type: 'pagina', src: d.src });
       if (!local && res?.error?.startsWith('il sito non mi dà')) {
         // Alcuni siti danno le immagini solo dalla loro pagina: la scarico da qui e la passo.
         const data = await fromPage(d.src);
-        if (data) res = await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src, data });
+        if (data) res = await send({ to: 'background', type: 'pagina', src: d.src, data });
       }
     } catch (e) {
       res = { error: String(e?.message || e) };
     }
-    if (done.get(img) !== d) continue; // l'immagine è cambiata nel frattempo
+    if (done.get(img) !== d) return; // l'immagine è cambiata nel frattempo
     if (res?.error) {
       badge(layer, 'Mercurio: ' + res.error, true);
       d.src = null; // si potrà riprovare
-      continue;
+      return;
     }
     d.result = res;
     // Traduco una nuvoletta alla volta e la disegno subito.
@@ -66,14 +83,14 @@ async function pump() {
     for (const b of res.balloons) {
       if (done.get(img) !== d || !cfg.attivo || !img.isConnected || img.getBoundingClientRect().width === 0) break;
       badge(layer, `Mercurio: traduco ${++n}/${res.balloons.length}`, false);
-      const t = await chrome.runtime.sendMessage({ to: 'background', type: 'traduci', text: b.text }).catch(e => ({ error: String(e?.message || e) }));
+      const t = await send({ to: 'background', type: 'traduci', text: b.text });
       if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); break; }
       b.it = t.it;
       if (done.get(img) === d) draw(img);
     }
     if (done.get(img) === d && n === res.balloons.length) badge(layer, null);
+    else if (done.get(img) === d) d.src = null; // interrotta: la riprendo quando torna visibile
   }
-  busy = false;
 }
 
 async function fromPage(src) {
