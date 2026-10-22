@@ -1,6 +1,6 @@
 # Mercurio per Opera GX / Chrome
 
-Estensione che traduce in italiano i fumetti in inglese e giapponese mentre li leggi sul PC.
+Estensione che traduce in italiano i fumetti e le novel in inglese e giapponese mentre li leggi sul PC.
 Legge le scritte con PaddleOCR direttamente nel browser e traduce con Ollama (TranslateGemma) sul tuo PC.
 
 ## Installare

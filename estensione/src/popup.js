@@ -24,19 +24,24 @@ async function init() {
   loadModels(cfg.modello);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  let on = !!(await ask({ type: 'stato', tabId: tab?.id }))?.on;
-  const showOn = () => {
-    $('avvia').textContent = on ? 'Ferma su questa scheda' : 'Avvia su questa scheda';
-    $('avvia').classList.toggle('acceso', on);
+  let mode = (await ask({ type: 'stato', tabId: tab?.id }))?.mode || null;
+  const NOMI = { fumetto: 'Leggi fumetto', novel: 'Leggi novel' };
+  const show = () => {
+    for (const k of ['fumetto', 'novel']) {
+      $(k).textContent = mode === k ? 'Ferma' : NOMI[k];
+      $(k).classList.toggle('acceso', mode === k);
+    }
   };
-  showOn();
-  $('avvia').onclick = async () => {
-    if (!tab) return;
-    on = !on;
-    await ask({ type: on ? 'avvia' : 'ferma', tabId: tab.id });
-    showOn();
-    if (on) window.close();
-  };
+  show();
+  for (const k of ['fumetto', 'novel']) {
+    $(k).onclick = async () => {
+      if (!tab) return;
+      mode = mode === k ? null : k;
+      await ask(mode ? { type: 'avvia', mode, tabId: tab.id } : { type: 'ferma', tabId: tab.id });
+      show();
+      if (mode) window.close();
+    };
+  }
   $('ollama').onchange = async () => {
     await chrome.storage.sync.set({ ollama: $('ollama').value.trim() || PREDEFINITE.ollama });
     loadModels($('modello').value);

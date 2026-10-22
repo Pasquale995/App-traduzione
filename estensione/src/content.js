@@ -1,12 +1,17 @@
 // Nella pagina del fumetto: trova le tavole, chiede la traduzione e disegna i riquadri sopra le nuvolette.
 import { PREDEFINITE } from './impostazioni.js';
+import { stato } from './stato.js';
+import { Novel } from './novel.js';
 
 let cfg = { ...PREDEFINITE };
-let on = false; // si accende solo con "Avvia" dal popup, scheda per scheda
+let on = false; // modalità fumetto: si accende solo dal popup, scheda per scheda
+let novel = null; // modalità novel: traduce il testo della pagina
+let mode = null;
 const MIN_W = 300, MIN_H = 200, MIN_SHOWN = 250;
 
 const done = new WeakMap();   // img -> { src, layer, result }
 const queue = [];
+let lastTexts = []; // ultime battute tradotte: contesto per la pagina dopo
 let busy = false;
 
 const isCandidate = img =>
@@ -29,7 +34,7 @@ function enqueue(img) {
   pump();
 }
 
-async function send(msg) {
+export async function send(msg) {
   try {
     return await chrome.runtime.sendMessage(msg);
   } catch (e) {
@@ -83,7 +88,7 @@ async function work() {
     if (cfg.intera && res.balloons.length > 1) {
       // Tutta la pagina in una richiesta; se la risposta non torna, ripiego una alla volta.
       badge(layer, `Mercurio: traduco la pagina (${res.balloons.length})`, false);
-      const t = await send({ to: 'background', type: 'traduciPagina', texts: res.balloons.map(b => b.text) });
+      const t = await send({ to: 'background', type: 'traduciPagina', texts: res.balloons.map(b => b.text), context: lastTexts });
       if (done.get(img) !== d) return;
       if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); d.src = null; return; }
       if (t?.its) {
@@ -101,6 +106,7 @@ async function work() {
       b.it = t.it;
       if (done.get(img) === d) draw(img);
     }
+    if (res.balloons.length) lastTexts = res.balloons.slice(-3).map(b => b.text);
     if (done.get(img) === d && n === res.balloons.length) badge(layer, null);
     else if (done.get(img) === d) d.src = null; // interrotta: la riprendo quando torna visibile
   }
@@ -204,6 +210,8 @@ function fit(el, h) {
 }
 
 function badge(layer, text, error) {
+  if (text) stato(text.replace(/^Mercurio: /, ''), error ? 'errore' : 'lavoro');
+  else stato(queue.length ? 'passo alla tavola successiva…' : 'pagina tradotta', queue.length ? 'lavoro' : 'fatto');
   let b = layer.querySelector('.mercurio-stato');
   if (!text) { b?.remove(); return; }
   if (!b) {
@@ -292,14 +300,28 @@ chrome.storage.onChanged.addListener((changes, area) => {
 function setOn(value) {
   if (on === value) return;
   on = value;
-  if (on) { scan(); retranslateAll(); }
-  else { queue.length = 0; redrawAll(); }
+  if (on) {
+    scan(); retranslateAll();
+    // Se tra qualche secondo non ho trovato tavole, lo dico: magari è una novel.
+    setTimeout(() => {
+      if (on && !document.querySelector('.mercurio-strato')) stato('nessuna tavola trovata: se è testo, usa "Leggi novel"', 'errore');
+    }, 4000);
+  } else { queue.length = 0; redrawAll(); }
+}
+
+function setMode(m) {
+  mode = m;
+  setOn(mode === 'fumetto');
+  if (mode === 'novel') { novel ??= new Novel(send, () => cfg); novel.start(); }
+  else novel?.stop();
+  if (!mode) stato(null);
+  else stato(mode === 'fumetto' ? 'acceso: cerco le tavole…' : 'acceso: cerco il testo…', 'lavoro');
 }
 
 chrome.runtime.onMessage.addListener(msg => {
   if (msg?.to !== 'pagina') return;
-  if (msg.type === 'ritraduci') retranslateAll();
-  if (msg.type === 'acceso') setOn(msg.on);
+  if (msg.type === 'ritraduci') { if (on) retranslateAll(); if (mode === 'novel') novel?.restart(); }
+  if (msg.type === 'acceso') setMode(msg.mode);
 });
 
 chrome.storage.sync.get(PREDEFINITE).then(async v => {
@@ -307,5 +329,5 @@ chrome.storage.sync.get(PREDEFINITE).then(async v => {
   scan();
   // Se in questa scheda l'avevi già avviato (es. capitolo successivo), riparte da solo.
   const r = await send({ to: 'background', type: 'stato' });
-  setOn(!!r?.on);
+  if (r?.mode) setMode(r.mode);
 });

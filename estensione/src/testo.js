@@ -283,6 +283,24 @@ export function balloons(lines) {
     .filter(b => isJapanese(b.text) || (b.text.match(/[A-Za-z]/g) || []).length >= 2);
 }
 
+/**
+ * Ordine di lettura: a righe dall'alto in basso; dentro la riga da destra a sinistra (manga)
+ * o da sinistra a destra. Conta per il contesto: il traduttore deve leggere le battute in ordine.
+ */
+export function readingOrder(items, rtl) {
+  const rows = [];
+  for (const it of [...items].sort((a, b) => a.box.y - b.box.y)) {
+    const row = rows.find(r => {
+      const top = Math.max(r.y0, it.box.y), bottom = Math.min(r.y1, it.box.y + it.box.h);
+      return bottom - top > 0.4 * Math.min(r.y1 - r.y0, it.box.h);
+    });
+    if (row) { row.items.push(it); row.y0 = Math.min(row.y0, it.box.y); row.y1 = Math.max(row.y1, it.box.y + it.box.h); }
+    else rows.push({ y0: it.box.y, y1: it.box.y + it.box.h, items: [it] });
+  }
+  return rows.sort((a, b) => a.y0 - b.y0)
+    .flatMap(r => r.items.sort((a, b) => rtl ? (b.box.x + b.box.w) - (a.box.x + a.box.w) : a.box.x - b.box.x));
+}
+
 /** "TUTTO MAIUSCOLO" -> "Tutto maiuscolo": i traduttori lo gestiscono meglio. */
 export function sentenceCase(text) {
   const letters = [...text].filter(c => /[A-Za-z]/.test(c));

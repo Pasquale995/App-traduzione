@@ -1,7 +1,7 @@
 // Documento nascosto dell'estensione: scarica l'immagine, legge le scritte e le traduce.
 import * as ort from 'onnxruntime-web/webgpu';
 import { PaddleOcr } from './ocr.js';
-import { loadWords, balloons, sentenceCase, isJapanese } from './testo.js';
+import { loadWords, balloons, sentenceCase, isJapanese, readingOrder } from './testo.js';
 import { PREDEFINITE } from './impostazioni.js';
 
 ort.env.wasm.wasmPaths = chrome.runtime.getURL('ort/');
@@ -120,14 +120,17 @@ async function translate(cfg, src) {
  * Tutta la pagina in una richiesta: le nuvolette numerate "1. …", così il modello vede la scena intera.
  * Restituisce null se la risposta non torna con gli stessi numeri (allora si va una nuvoletta alla volta).
  */
-async function translatePage(cfg, texts) {
+async function translatePage(cfg, texts, context = []) {
   const model = await pickModel(cfg);
   const its = texts.map(t => explainedSound(t) ? t : cache.get(model + '\n' + t));
   const todo = texts.map((t, i) => [t, i]).filter(([, i]) => its[i] == null);
   if (todo.length === 1) its[todo[0][1]] = await translate(cfg, todo[0][0]);
   else if (todo.length > 1) {
     const japanese = todo.filter(([t]) => isJapanese(t)).length * 2 > todo.length;
-    const numbered = todo.map(([t], n) => `${n + 1}. ${japanese ? t : sentenceCase(t)}`).join('\n');
+    // Le ultime battute della pagina prima vanno in testa, solo per contesto: la loro traduzione la scarto.
+    const ctx = context.filter(t => t && isJapanese(t) === japanese).slice(-3);
+    const lines = [...ctx, ...todo.map(([t]) => t)];
+    const numbered = lines.map((t, n) => `${n + 1}. ${japanese ? t : sentenceCase(t)}`).join('\n');
     const j = await ollama(cfg, '/api/chat', {
       model, stream: false, keep_alive: '30m',
       options: { temperature: 0.2 },
@@ -141,9 +144,10 @@ async function translatePage(cfg, texts) {
       if (m) { last = Number(m[1]); got.set(last, m[2].trim()); }
       else if (last && line.trim()) got.set(last, got.get(last) + ' ' + line.trim()); // battuta andata a capo
     }
-    if (todo.some((_, n) => !got.get(n + 1))) return null;
+    const k = ctx.length;
+    if (todo.some((_, n) => !got.get(k + n + 1))) return null;
     todo.forEach(([t, i], n) => {
-      const it = got.get(n + 1).replace(/^["«]|["»]$/g, '').trim();
+      const it = got.get(k + n + 1).replace(/^["«]|["»]$/g, '').trim();
       its[i] = it;
       cache.set(model + '\n' + t, it);
     });
@@ -160,7 +164,9 @@ async function page(src, data) {
   if (pages.has(src)) return pages.get(src);
   const [ocr, img] = await Promise.all([getOcr(), loadImage(data || src)]);
   const t0 = performance.now();
-  const found = balloons(await ocr.read(img)).map(b => ({ box: b.box, text: b.text }));
+  // Pagine "normali" (manga): righe da destra a sinistra. Strisce lunghe (webtoon): dall'alto in basso.
+  const rtl = img.height < img.width * 2;
+  const found = readingOrder(balloons(await ocr.read(img)), rtl).map(b => ({ box: b.box, text: b.text }));
   const result = { w: img.width, h: img.height, balloons: found, ms: Math.round(performance.now() - t0), backend };
   pages.set(src, result);
   if (pages.size > 300) pages.delete(pages.keys().next().value);
@@ -180,7 +186,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.to !== 'offscreen') return;
   if (msg.cfg) current = { ...PREDEFINITE, ...msg.cfg };
   const run = { pagina: () => page(msg.src, msg.data), traduci: async () => ({ it: await translate(await settings(), msg.text) }),
-    traduciPagina: async () => ({ its: await translatePage(await settings(), msg.texts) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
+    traduciPagina: async () => ({ its: await translatePage(await settings(), msg.texts, msg.context) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
   if (!run) return;
   if (!['pagina', 'traduci', 'traduciPagina'].includes(msg.type)) autoModel = null; // dopo un cambio di impostazioni riscelgo il modello
   run().then(reply, e => reply({ error: String(e?.message || e) }));
