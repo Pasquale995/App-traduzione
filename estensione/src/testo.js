@@ -212,7 +212,11 @@ function distance(a, b) {
 
 /** Unisce le righe una sotto l'altra e vicine: di solito sono lo stesso balloon. */
 export function group(lines) {
-  const pieces = lines.map(l => ({ ...l, lh: Math.max(1, l.box.h) }));
+  // Le colonne verticali (giapponese) si raggruppano di lato, le righe orizzontali una sotto l'altra.
+  const pieces = lines.map(l => {
+    const vertical = l.box.h > l.box.w * 1.6 && isJapanese(l.text);
+    return { ...l, vertical, lh: Math.max(1, vertical ? l.box.w : l.box.h) };
+  });
   const parent = pieces.map((_, i) => i);
   const find = i => { while (parent[i] !== i) i = parent[i]; return i; };
   for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
@@ -221,7 +225,9 @@ export function group(lines) {
   const groups = new Map();
   pieces.forEach((p, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(p); });
   return [...groups.values()].map(members => {
-    members.sort((a, b) => a.box.y - b.box.y);
+    const vertical = members.every(m => m.vertical);
+    // Colonne giapponesi: si leggono da destra a sinistra.
+    members.sort(vertical ? (a, b) => b.box.x - a.box.x : (a, b) => a.box.y - b.box.y);
     const x0 = Math.min(...members.map(m => m.box.x)), y0 = Math.min(...members.map(m => m.box.y));
     const x1 = Math.max(...members.map(m => m.box.x + m.box.w)), y1 = Math.max(...members.map(m => m.box.y + m.box.h));
     return {
@@ -233,6 +239,14 @@ export function group(lines) {
 }
 
 function close(a, b) {
+  if (a.vertical !== b.vertical) return false;
+  if (a.vertical) {
+    const lw = Math.min(a.lh, b.lh);
+    const hGap = Math.max(a.box.x, b.box.x) - Math.min(a.box.x + a.box.w, b.box.x + b.box.w);
+    const vOverlap = Math.min(a.box.y + a.box.h, b.box.y + b.box.h) - Math.max(a.box.y, b.box.y);
+    const short = Math.min(a.box.h, b.box.h);
+    return Math.max(a.lh, b.lh) <= 2 * lw && hGap < 0.9 * lw && vOverlap > 0.3 * short;
+  }
   const lh = Math.min(a.lh, b.lh);
   const vGap = Math.max(a.box.y, b.box.y) - Math.min(a.box.y + a.box.h, b.box.y + b.box.h);
   const hOverlap = Math.min(a.box.x + a.box.w, b.box.x + b.box.w) - Math.max(a.box.x, b.box.x);
@@ -245,7 +259,9 @@ function joinLines(lines) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    if (s) {
+    if (s && isJapanese(s.slice(-1)) && isJapanese(line[0])) {
+      // in giapponese le righe si attaccano senza spazio
+    } else if (s) {
       if (s.length > 1 && s.endsWith('-') && /[A-Za-z]/.test(s[s.length - 2])) s = s.slice(0, -1);
       else s += ' ';
     }
@@ -255,8 +271,13 @@ function joinLines(lines) {
 }
 
 /** Dalla lettura grezza ai balloon da tradurre: righe affidabili, raggruppate e ripulite. */
+const KANA = /[぀-ヿ]/;
+
+/** Giapponese credibile: con kana, oppure in colonna verticale (solo kanji in orizzontale di solito è rumore). */
+const goodJapanese = l => l.text.length >= 2 && (KANA.test(l.text) || l.box.h > l.box.w * 1.6);
+
 export function balloons(lines) {
-  const good = lines.filter(l => l.conf >= 0.6 && ((isJapanese(l.text) && l.text.length >= 2) || (l.text.match(/[A-Za-z]/g) || []).length >= 2));
+  const good = lines.filter(l => l.conf >= 0.6 && ((isJapanese(l.text) && goodJapanese(l)) || (l.text.match(/[A-Za-z]/g) || []).length >= 2));
   return group(good)
     .map(b => ({ ...b, text: clean(b.text) }))
     .filter(b => isJapanese(b.text) || (b.text.match(/[A-Za-z]/g) || []).length >= 2);

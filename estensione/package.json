@@ -12,7 +12,8 @@
     "@gutenye/ocr-browser": "^1.4.9",
     "@gutenye/ocr-models": "^1.4.2",
     "esbuild": "^0.28.2",
-    "onnxruntime-web": "^1.30.0"
+    "onnxruntime-web": "^1.30.0",
+    "pdfmarkdown-ppocrv5-models": "^1.0.0"
   },
   "devDependencies": {
     "jpeg-js": "^0.4.4",

@@ -18,6 +18,8 @@ async function loadModels(current) {
 async function init() {
   const cfg = { ...PREDEFINITE, ...(await chrome.storage.sync.get(PREDEFINITE)) };
   $('ollama').value = cfg.ollama;
+  $('intera').checked = cfg.intera;
+  $('intera').onchange = () => chrome.storage.sync.set({ intera: $('intera').checked });
   for (const k of ['opacita', 'testo']) { $(k).value = cfg[k]; $(k + 'V').textContent = cfg[k]; }
   loadModels(cfg.modello);
 

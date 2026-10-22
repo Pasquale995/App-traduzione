@@ -17,7 +17,8 @@ export class PaddleOcr {
     o.ort = ort;
     o.det = await ort.InferenceSession.create(det, sessionOptions);
     o.rec = await ort.InferenceSession.create(rec, sessionOptions);
-    o.chars = ['', ...keys.split(/\r?\n/).filter((l, i, a) => l.length > 0 || i < a.length - 1), ' '];
+    // Una riga per carattere; le righe vuote non contano (il dizionario v5 ne ha una spuria).
+    o.chars = ['', ...keys.split(/\r?\n/).filter(l => l.length > 0), ' '];
     return o;
   }
 
@@ -77,16 +78,46 @@ export class PaddleOcr {
 
   async recognize(img, box) {
     if (box.w < 4 || box.h < 4) return null;
-    const vertical = box.h > box.w * 1.6;
-    if (vertical) return null; // testo verticale (giapponese): non ancora gestito
+    if (box.h > box.w * 1.6) {
+      // Colonna verticale (giapponese): la giro di 90°, con un po' di margine per i kana piccoli (っ ょ) sul bordo.
+      const m = Math.round(box.w * 0.15);
+      const x = Math.max(0, box.x - m), r = Math.min(img.width, box.x + box.w + m);
+      return this.run(img, { x, y: box.y, w: r - x, h: box.h }, 'gira');
+    }
+    return this.run(img, box, 'dritta');
+  }
+
+  /**
+   * Prepara la riga per il modello (alta 48) e la legge.
+   * dritta: così com'è; gira: ruotata di 90° (l'alto finisce a sinistra);
+   * fila: la colonna tagliata in quadrati, uno per carattere, messi uno accanto all'altro.
+   */
+  async run(img, box, mode) {
     const h = REC_HEIGHT;
-    const w = Math.min(REC_MAX_WIDTH, Math.max(16, Math.round((box.w * h) / box.h)));
+    let srcW, srcH, at;
+    if (mode === 'dritta') {
+      srcW = box.w; srcH = box.h;
+      at = (u, v) => [box.x + u, box.y + v];
+    } else if (mode === 'gira') {
+      srcW = box.h; srcH = box.w;
+      at = (u, v) => [box.x + box.w - 1 - v, box.y + u];
+    } else {
+      const n = Math.max(1, Math.round(box.h / box.w));
+      const cell = box.h / n;
+      srcW = n * box.w; srcH = box.w;
+      at = (u, v) => {
+        const k = Math.floor(u / box.w);
+        return [box.x + (u - k * box.w), box.y + k * cell + (v * cell) / box.w];
+      };
+    }
+    const w = Math.min(REC_MAX_WIDTH, Math.max(16, Math.round((srcW * h) / srcH)));
     const input = new Float32Array(3 * w * h);
-    const sx = box.w / w, sy = box.h / h;
+    const sx = srcW / w, sy = srcH / h;
     for (let y = 0; y < h; y++) {
-      const oy = Math.min(img.height - 1, box.y + Math.floor((y + 0.5) * sy));
       for (let x = 0; x < w; x++) {
-        const ox = Math.min(img.width - 1, box.x + Math.floor((x + 0.5) * sx));
+        const [px, py] = at((x + 0.5) * sx, (y + 0.5) * sy);
+        const ox = Math.min(img.width - 1, Math.max(0, Math.floor(px)));
+        const oy = Math.min(img.height - 1, Math.max(0, Math.floor(py)));
         const p = (oy * img.width + ox) * 4;
         for (let c = 0; c < 3; c++) input[c * w * h + y * w + x] = (img.data[p + c] / 255 - 0.5) / 0.5;
       }

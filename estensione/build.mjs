@@ -22,8 +22,10 @@ for (const f of ['content.js', 'popup.js']) {
 const models = 'node_modules/@gutenye/ocr-models/assets/';
 fs.mkdirSync(path.join(dist, 'modelli'));
 fs.copyFileSync(models + 'ch_PP-OCRv4_det_infer.onnx', path.join(dist, 'modelli/det.onnx'));
-fs.copyFileSync(models + 'ch_PP-OCRv4_rec_infer.onnx', path.join(dist, 'modelli/rec.onnx'));
-fs.copyFileSync(models + 'ppocr_keys_v1.txt', path.join(dist, 'modelli/chiavi.txt'));
+// PP-OCRv5: cinese, inglese e giapponese (kana compresi) nello stesso modello.
+const v5 = 'node_modules/pdfmarkdown-ppocrv5-models/recognition/';
+fs.copyFileSync(v5 + 'PP-OCRv5_mobile_rec_infer.onnx', path.join(dist, 'modelli/rec.onnx'));
+fs.copyFileSync(v5 + 'ppocrv5_dict.txt', path.join(dist, 'modelli/chiavi.txt'));
 fs.copyFileSync('../app/src/main/assets/parole_en.txt', path.join(dist, 'parole_en.txt'));
 
 // Il motore di onnxruntime (WebAssembly) va accanto, non dentro il bundle.

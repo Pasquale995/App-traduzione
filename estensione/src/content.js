@@ -79,9 +79,21 @@ async function work() {
       return;
     }
     d.result = res;
-    // Traduco una nuvoletta alla volta e la disegno subito.
     let n = 0;
-    for (const b of res.balloons) {
+    if (cfg.intera && res.balloons.length > 1) {
+      // Tutta la pagina in una richiesta; se la risposta non torna, ripiego una alla volta.
+      badge(layer, `Mercurio: traduco la pagina (${res.balloons.length})`, false);
+      const t = await send({ to: 'background', type: 'traduciPagina', texts: res.balloons.map(b => b.text) });
+      if (done.get(img) !== d) return;
+      if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); d.src = null; return; }
+      if (t?.its) {
+        res.balloons.forEach((b, i) => { b.it = t.its[i]; });
+        n = res.balloons.length;
+        draw(img);
+      }
+    }
+    // Una nuvoletta alla volta, disegnata appena pronta.
+    for (const b of n ? [] : res.balloons) {
       if (done.get(img) !== d || !on || !img.isConnected || img.getBoundingClientRect().width === 0) break;
       badge(layer, `Mercurio: traduco ${++n}/${res.balloons.length}`, false);
       const t = await send({ to: 'background', type: 'traduci', text: b.text });
