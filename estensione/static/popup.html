@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 300px; margin: 0; padding: 14px; font: 13px system-ui, sans-serif; background: #1d1b22; color: #eee; }
+  h1 { font-size: 17px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  h1 img { width: 26px; height: 26px; }
+  label { display: block; margin: 10px 0 4px; color: #bbb; }
+  input[type=text], select { width: 100%; box-sizing: border-box; padding: 6px; border-radius: 6px; border: 1px solid #555; background: #2a2730; color: #eee; }
+  input[type=range] { width: 100%; }
+  .riga { display: flex; align-items: center; justify-content: space-between; }
+  button { margin-top: 12px; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #fa1e4e; color: #fff; font-weight: 600; cursor: pointer; }
+  button.secondario { background: #3a3642; }
+  #esito { margin-top: 10px; white-space: pre-wrap; color: #ccc; min-height: 1em; }
+</style>
+</head>
+<body>
+  <h1><img src="icone/48.png" alt="">Mercurio</h1>
+  <div class="riga"><span>Traduci le pagine</span><input type="checkbox" id="attivo"></div>
+  <label for="ollama">Indirizzo di Ollama</label>
+  <input type="text" id="ollama" placeholder="http://localhost:11434">
+  <label for="modello">Modello</label>
+  <select id="modello"><option value="">Automatico (TranslateGemma se c'è)</option></select>
+  <label for="opacita">Riquadri: opacità <span id="opacitaV"></span>%</label>
+  <input type="range" id="opacita" min="20" max="100" step="5">
+  <label for="testo">Grandezza del testo <span id="testoV"></span>%</label>
+  <input type="range" id="testo" min="60" max="160" step="10">
+  <button id="prova">Prova Ollama</button>
+  <button id="ritraduci" class="secondario">Traduci di nuovo questa pagina</button>
+  <div id="esito"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+.mercurio-strato { position: absolute; pointer-events: none; z-index: 2147483000; }
+.mercurio-riquadro {
+  position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+  text-align: center; background: #fff; color: #000; border: 1.5px solid rgba(30,30,30,.8); border-radius: 8px;
+  padding: 3px 4px; font: 700 16px/1.15 "Comic Sans MS", "Comic Neue", Arial, sans-serif; overflow: hidden;
+  pointer-events: auto; cursor: help;
+}
+.mercurio-riquadro:hover { opacity: .08 !important; }
+.mercurio-stato {
+  position: absolute; top: 6px; right: 6px; z-index: 2147483001; pointer-events: none;
+  background: rgba(200,30,30,.9); color: #fff; font: 600 12px Arial, sans-serif; border-radius: 10px; padding: 3px 8px;
+}
