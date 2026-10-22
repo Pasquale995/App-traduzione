@@ -18,9 +18,11 @@ const srcOf = img => img.currentSrc || img.src;
 function enqueue(img) {
   if (!cfg.attivo || !isCandidate(img)) return;
   const src = srcOf(img);
-  if (!src || src.startsWith('blob:') || src.startsWith('data:')) return;
+  if (!src) return;
   const d = done.get(img);
   if (d && d.src === src) return;
+  // Pagina cambiata nella stessa immagine (lettori manga): via subito le traduzioni vecchie.
+  d?.layer?.querySelectorAll('.mercurio-riquadro').forEach(e => e.remove());
   done.set(img, { src, layer: d?.layer, result: null });
   if (!queue.includes(img)) queue.push(img);
   pump();
@@ -39,8 +41,12 @@ async function pump() {
     badge(layer, 'Mercurio: leggo…', false);
     let res;
     try {
-      res = await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src });
-      if (res?.error?.startsWith('il sito non mi dà')) {
+      // Immagini che esistono solo nella pagina (blob:): le passo io.
+      const local = d.src.startsWith('blob:') || d.src.startsWith('data:');
+      res = local
+        ? await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src, data: await fromPage(d.src) })
+        : await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src });
+      if (!local && res?.error?.startsWith('il sito non mi dà')) {
         // Alcuni siti danno le immagini solo dalla loro pagina: la scarico da qui e la passo.
         const data = await fromPage(d.src);
         if (data) res = await chrome.runtime.sendMessage({ to: 'background', type: 'pagina', src: d.src, data });
@@ -55,8 +61,17 @@ async function pump() {
       continue;
     }
     d.result = res;
-    badge(layer, null);
-    draw(img);
+    // Traduco una nuvoletta alla volta e la disegno subito.
+    let n = 0;
+    for (const b of res.balloons) {
+      if (done.get(img) !== d || !cfg.attivo || !img.isConnected || img.getBoundingClientRect().width === 0) break;
+      badge(layer, `Mercurio: traduco ${++n}/${res.balloons.length}`, false);
+      const t = await chrome.runtime.sendMessage({ to: 'background', type: 'traduci', text: b.text }).catch(e => ({ error: String(e?.message || e) }));
+      if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); break; }
+      b.it = t.it;
+      if (done.get(img) === d) draw(img);
+    }
+    if (done.get(img) === d && n === res.balloons.length) badge(layer, null);
   }
   busy = false;
 }
@@ -195,6 +210,9 @@ function relayoutAll() {
       if (!img.isConnected) { d.layer.remove(); done.delete(img); }
       else place(img);
     }
+    // Alcuni lettori cambiano pagina senza toccare l'attributo src (srcset, <picture>): me ne accorgo qui.
+    if (d && d.src && d.src !== srcOf(img) && img.complete) enqueue(img);
+    else if (!img._mercurio) watch(img);
   });
 }
 

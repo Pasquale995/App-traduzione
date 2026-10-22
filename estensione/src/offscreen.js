@@ -118,20 +118,16 @@ async function translate(cfg, src) {
 
 // ---------- Messaggi ----------
 
-const pages = new Map(); // src -> risultato già pronto
+const pages = new Map(); // src -> scritte già lette
 
+/** Solo lettura: le traduzioni le chiede la pagina una alla volta, così compaiono man mano. */
 async function page(src, data) {
-  const cfg = await settings();
-  const key = (cfg.modello || 'auto') + '\n' + src;
-  if (pages.has(key)) return pages.get(key);
+  if (pages.has(src)) return pages.get(src);
   const [ocr, img] = await Promise.all([getOcr(), loadImage(data || src)]);
   const t0 = performance.now();
-  const found = balloons(await ocr.read(img));
-  const tRead = performance.now() - t0;
-  const out = [];
-  for (const b of found) out.push({ box: b.box, text: b.text, it: await translate(cfg, b.text) });
-  const result = { w: img.width, h: img.height, balloons: out, ms: { lettura: Math.round(tRead), totale: Math.round(performance.now() - t0) }, backend };
-  pages.set(key, result);
+  const found = balloons(await ocr.read(img)).map(b => ({ box: b.box, text: b.text }));
+  const result = { w: img.width, h: img.height, balloons: found, ms: Math.round(performance.now() - t0), backend };
+  pages.set(src, result);
   if (pages.size > 300) pages.delete(pages.keys().next().value);
   return result;
 }
@@ -140,6 +136,7 @@ async function test() {
   const cfg = await settings();
   const t0 = performance.now();
   const model = await pickModel(cfg);
+  cache.delete(model + '\nDAMN... TOP RANKERS HAVE CONNECTIONS WITH GOVERNMENTS TOO.'); // tempo vero, non dalla memoria
   const it = await translate(cfg, 'DAMN... TOP RANKERS HAVE CONNECTIONS WITH GOVERNMENTS TOO.');
   return { model, it, secondi: ((performance.now() - t0) / 1000).toFixed(1) };
 }
@@ -147,9 +144,9 @@ async function test() {
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.to !== 'offscreen') return;
   if (msg.cfg) current = { ...PREDEFINITE, ...msg.cfg };
-  const run = { pagina: () => page(msg.src, msg.data), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
+  const run = { pagina: () => page(msg.src, msg.data), traduci: async () => ({ it: await translate(await settings(), msg.text) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
   if (!run) return;
-  if (msg.type !== 'pagina') autoModel = null; // dopo un cambio di impostazioni riscelgo il modello
+  if (msg.type !== 'pagina' && msg.type !== 'traduci') autoModel = null; // dopo un cambio di impostazioni riscelgo il modello
   run().then(reply, e => reply({ error: String(e?.message || e) }));
   return true;
 });
