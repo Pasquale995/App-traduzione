@@ -2,7 +2,7 @@
 .mercurio-riquadro {
   position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
   text-align: center; background: #fff; color: #000; border: 1.5px solid rgba(30,30,30,.8); border-radius: 8px;
-  padding: 3px 4px; font: 700 16px/1.15 "Comic Sans MS", "Comic Neue", Arial, sans-serif; overflow: hidden;
+  padding: 3px 4px; font: 700 16px/1.15 "Comic Sans MS", "Comic Neue", Arial, sans-serif; overflow: hidden; hyphens: manual; word-break: normal;
   pointer-events: auto; cursor: help;
 }
 .mercurio-riquadro:hover { opacity: .08 !important; }

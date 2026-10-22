@@ -142,16 +142,35 @@ function draw(img) {
   }
 }
 
-/** Rimpicciolisce il testo finché entra nel riquadro; se non basta, allunga il riquadro. */
+const MIN_FONT = 11; // sotto non si legge più
+
+/**
+ * Rimpicciolisce il testo finché entra nel riquadro. Se anche al minimo non entra,
+ * allarga il riquadro (restando centrato e dentro la tavola) e poi lo allunga: il testo non si taglia mai.
+ */
 function fit(el, h) {
-  let size = Math.round(16 * cfg.testo / 100);
+  let size = Math.max(MIN_FONT, Math.round(16 * cfg.testo / 100));
+  const floor = Math.max(MIN_FONT, Math.round(size * 0.7)); // oltre, meglio allargare il riquadro
+  const overflows = () => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > h + 1;
   el.style.fontSize = size + 'px';
   el.style.height = 'auto';
   el.style.minHeight = h + 'px';
-  while (el.scrollHeight > h + 1 && size > 8) {
+  while (overflows() && size > floor) {
     size--;
     el.style.fontSize = size + 'px';
   }
+  // Parole troppo lunghe per la larghezza: allargo quanto serve.
+  const layerW = el.parentElement.clientWidth;
+  let w = el.offsetWidth;
+  while (el.scrollWidth > el.clientWidth + 1 && w < layerW) {
+    const grow = Math.min(el.scrollWidth - el.clientWidth + 6, layerW - w);
+    const left = Math.max(0, Math.min(layerW - w - grow, parseFloat(el.style.left) - grow / 2));
+    w += grow;
+    el.style.width = w + 'px';
+    el.style.left = left + 'px';
+  }
+  // Se ancora non basta (tavola stretta), spezzo le parole piuttosto che tagliarle.
+  if (el.scrollWidth > el.clientWidth + 1) el.style.overflowWrap = 'anywhere';
 }
 
 function badge(layer, text, error) {
