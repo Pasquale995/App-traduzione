@@ -17,12 +17,24 @@ async function loadModels(current) {
 
 async function init() {
   const cfg = { ...PREDEFINITE, ...(await chrome.storage.sync.get(PREDEFINITE)) };
-  $('attivo').checked = cfg.attivo;
   $('ollama').value = cfg.ollama;
   for (const k of ['opacita', 'testo']) { $(k).value = cfg[k]; $(k + 'V').textContent = cfg[k]; }
   loadModels(cfg.modello);
 
-  $('attivo').onchange = () => chrome.storage.sync.set({ attivo: $('attivo').checked });
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  let on = !!(await ask({ type: 'stato', tabId: tab?.id }))?.on;
+  const showOn = () => {
+    $('avvia').textContent = on ? 'Ferma su questa scheda' : 'Avvia su questa scheda';
+    $('avvia').classList.toggle('acceso', on);
+  };
+  showOn();
+  $('avvia').onclick = async () => {
+    if (!tab) return;
+    on = !on;
+    await ask({ type: on ? 'avvia' : 'ferma', tabId: tab.id });
+    showOn();
+    if (on) window.close();
+  };
   $('ollama').onchange = async () => {
     await chrome.storage.sync.set({ ollama: $('ollama').value.trim() || PREDEFINITE.ollama });
     loadModels($('modello').value);

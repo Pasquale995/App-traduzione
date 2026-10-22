@@ -2,6 +2,7 @@
 import { PREDEFINITE } from './impostazioni.js';
 
 let cfg = { ...PREDEFINITE };
+let on = false; // si accende solo con "Avvia" dal popup, scheda per scheda
 const MIN_W = 300, MIN_H = 200, MIN_SHOWN = 250;
 
 const done = new WeakMap();   // img -> { src, layer, result }
@@ -16,7 +17,7 @@ const srcOf = img => img.currentSrc || img.src;
 // ---------- Coda: una tavola alla volta, così il PC non si blocca ----------
 
 function enqueue(img) {
-  if (!cfg.attivo || !isCandidate(img)) return;
+  if (!on || !isCandidate(img)) return;
   const src = srcOf(img);
   if (!src) return;
   const d = done.get(img);
@@ -53,7 +54,7 @@ async function work() {
     queue.sort((a, b) => Math.abs(a.getBoundingClientRect().top) - Math.abs(b.getBoundingClientRect().top));
     const img = queue.shift();
     const d = done.get(img);
-    if (!d || !cfg.attivo) return;
+    if (!d || !on) return;
     const layer = layerFor(img);
     badge(layer, 'Mercurio: leggo…', false);
     let res;
@@ -81,7 +82,7 @@ async function work() {
     // Traduco una nuvoletta alla volta e la disegno subito.
     let n = 0;
     for (const b of res.balloons) {
-      if (done.get(img) !== d || !cfg.attivo || !img.isConnected || img.getBoundingClientRect().width === 0) break;
+      if (done.get(img) !== d || !on || !img.isConnected || img.getBoundingClientRect().width === 0) break;
       badge(layer, `Mercurio: traduco ${++n}/${res.balloons.length}`, false);
       const t = await send({ to: 'background', type: 'traduci', text: b.text });
       if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); break; }
@@ -129,7 +130,7 @@ function place(img) {
   s.top = r.top + window.scrollY + 'px';
   s.width = r.width + 'px';
   s.height = r.height + 'px';
-  s.display = r.width > 0 && cfg.attivo ? '' : 'none';
+  s.display = r.width > 0 && on ? '' : 'none';
   const k = d.result ? r.width / d.result.w : 0;
   if (k && Math.abs((d.k || 0) - k) > 0.001) draw(img);
 }
@@ -260,7 +261,7 @@ setInterval(relayoutAll, 1500); // i siti spostano le tavole mentre caricano
 // ---------- Impostazioni ----------
 
 function redrawAll() {
-  document.querySelectorAll('.mercurio-strato').forEach(l => { l.style.display = cfg.attivo ? '' : 'none'; });
+  document.querySelectorAll('.mercurio-strato').forEach(l => { l.style.display = on ? '' : 'none'; });
   document.querySelectorAll('img').forEach(img => { if (done.get(img)?.result) draw(img); });
 }
 
@@ -273,15 +274,26 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'sync') return;
   for (const [k, v] of Object.entries(changes)) cfg[k] = v.newValue ?? PREDEFINITE[k];
   if (changes.modello || changes.ollama) retranslateAll();
-  else if (changes.attivo?.newValue) { redrawAll(); scan(); retranslateAll(); }
   else redrawAll();
 });
 
+function setOn(value) {
+  if (on === value) return;
+  on = value;
+  if (on) { scan(); retranslateAll(); }
+  else { queue.length = 0; redrawAll(); }
+}
+
 chrome.runtime.onMessage.addListener(msg => {
-  if (msg?.to === 'pagina' && msg.type === 'ritraduci') retranslateAll();
+  if (msg?.to !== 'pagina') return;
+  if (msg.type === 'ritraduci') retranslateAll();
+  if (msg.type === 'acceso') setOn(msg.on);
 });
 
-chrome.storage.sync.get(PREDEFINITE).then(v => {
+chrome.storage.sync.get(PREDEFINITE).then(async v => {
   cfg = { ...PREDEFINITE, ...v };
   scan();
+  // Se in questa scheda l'avevi già avviato (es. capitolo successivo), riparte da solo.
+  const r = await send({ to: 'background', type: 'stato' });
+  setOn(!!r?.on);
 });

@@ -12,12 +12,14 @@
   .riga { display: flex; align-items: center; justify-content: space-between; }
   button { margin-top: 12px; width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #fa1e4e; color: #fff; font-weight: 600; cursor: pointer; }
   button.secondario { background: #3a3642; }
+  button.grande { margin: 0 0 4px; padding: 11px; font-size: 14px; background: #2e9e5b; }
+  button.grande.acceso { background: #3a3642; }
   #esito { margin-top: 10px; white-space: pre-wrap; color: #ccc; min-height: 1em; }
 </style>
 </head>
 <body>
   <h1><img src="icone/48.png" alt="">Mercurio</h1>
-  <div class="riga"><span>Traduci le pagine</span><input type="checkbox" id="attivo"></div>
+  <button id="avvia" class="grande">Avvia su questa scheda</button>
   <label for="ollama">Indirizzo di Ollama</label>
   <input type="text" id="ollama" placeholder="http://localhost:11434">
   <label for="modello">Modello</label>
