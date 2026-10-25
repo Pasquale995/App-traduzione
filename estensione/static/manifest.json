@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mercurio",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Traduce in italiano fumetti e novel in inglese e giapponese mentre li leggi: legge le scritte sul tuo PC e traduce con Mercurio Motore o Ollama.",
   "icons": {
     "16": "icone/16.png",
