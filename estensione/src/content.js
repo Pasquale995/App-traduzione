@@ -10,7 +10,7 @@ let mode = null;
 const MIN_W = 300, MIN_H = 200, MIN_SHOWN = 250;
 
 const done = new WeakMap();   // img -> { src, layer, result }
-const tracked = new Set();    // immagini con uno strato disegnato: servono per toglierlo quando spariscono
+const shown = new Set(); // immagini con uno strato: se il sito le toglie (cambio capitolo) nascondo le loro traduzioni
 const queue = [];
 let lastTexts = []; // ultime battute tradotte: contesto per la pagina dopo
 let busy = false;
@@ -136,7 +136,7 @@ function layerFor(img) {
   layer.className = 'mercurio-strato';
   document.body.appendChild(layer);
   d.layer = layer;
-  tracked.add(img);
+  shown.add(img);
   place(img);
   return layer;
 }
@@ -251,11 +251,10 @@ new MutationObserver(muts => {
   for (const m of muts) {
     if (m.type === 'attributes' && m.target.tagName === 'IMG') {
       const d = done.get(m.target);
-      if (d && d.src !== srcOf(m.target)) forget(m.target);
+      if (d && d.src !== srcOf(m.target)) { d.layer?.remove(); done.delete(m.target); }
       watcher.unobserve(m.target);
       watcher.observe(m.target);
     }
-    if (m.removedNodes.length && tracked.size) cleanupSoon();
     for (const n of m.addedNodes) {
       if (n.tagName === 'IMG') watch(n);
       else if (n.nodeType === 1) scan(n);
@@ -263,31 +262,15 @@ new MutationObserver(muts => {
   }
 }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset'] });
 
-function forget(img) {
-  done.get(img)?.layer?.remove();
-  done.delete(img);
-  tracked.delete(img);
-  const i = queue.indexOf(img);
-  if (i >= 0) queue.splice(i, 1);
-}
-
-// Cambio capitolo senza ricaricare la pagina: il contesto del capitolo prima non serve più.
-// (Le traduzioni vecchie le toglie già il controllo sulle tavole sparite: qui non tocco altro,
-// perché alcuni lettori cambiano l'indirizzo a ogni pagina.)
-let lastUrl = location.href;
-function checkUrl() {
-  if (location.href === lastUrl) return;
-  lastUrl = location.href;
-  lastTexts = [];
-}
-
 function relayoutAll() {
-  checkUrl();
-  // Tavole tolte dalla pagina: le loro traduzioni non devono restare a galla.
-  for (const img of tracked) if (!img.isConnected) forget(img);
+  // Tavole tolte dalla pagina: place() nasconde lo strato (larghezza 0). Tengo le traduzioni: se tornano, ricompaiono.
+  for (const img of shown) if (!img.isConnected) { place(img); if (!done.get(img)?.layer?.isConnected) shown.delete(img); }
   document.querySelectorAll('img').forEach(img => {
     const d = done.get(img);
-    if (d?.layer) place(img);
+    if (d?.layer) {
+      if (!img.isConnected) { d.layer.remove(); done.delete(img); }
+      else place(img);
+    }
     // Alcuni lettori cambiano pagina senza toccare l'attributo src (srcset, <picture>): me ne accorgo qui.
     if (d && d.src && d.src !== srcOf(img) && img.complete) enqueue(img);
     else if (!img._mercurio) watch(img);
@@ -297,9 +280,6 @@ function relayoutAll() {
 let raf = 0;
 const relayoutSoon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(relayoutAll); };
 window.addEventListener('resize', relayoutSoon);
-// Tavole tolte dal sito: controllo poco dopo, una volta sola anche se il sito toglie mille cose.
-let cleanupT = 0;
-const cleanupSoon = () => { if (!cleanupT) cleanupT = setTimeout(() => { cleanupT = 0; relayoutAll(); }, 250); };
 setInterval(relayoutAll, 1500); // i siti spostano le tavole mentre caricano
 
 // ---------- Impostazioni ----------
@@ -311,7 +291,6 @@ function redrawAll() {
 
 function retranslateAll() {
   document.querySelectorAll('.mercurio-strato').forEach(l => l.remove());
-  tracked.clear();
   document.querySelectorAll('img').forEach(img => { done.delete(img); watcher.unobserve(img); watcher.observe(img); });
 }
 
