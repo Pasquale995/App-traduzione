@@ -255,7 +255,7 @@ new MutationObserver(muts => {
       watcher.unobserve(m.target);
       watcher.observe(m.target);
     }
-    if (m.removedNodes.length && tracked.size) relayoutSoon();
+    if (m.removedNodes.length && tracked.size) cleanupSoon();
     for (const n of m.addedNodes) {
       if (n.tagName === 'IMG') watch(n);
       else if (n.nodeType === 1) scan(n);
@@ -271,17 +271,14 @@ function forget(img) {
   if (i >= 0) queue.splice(i, 1);
 }
 
-// Cambio capitolo senza ricaricare la pagina (il sito cambia solo l'indirizzo): via tutto e ricomincio.
+// Cambio capitolo senza ricaricare la pagina: il contesto del capitolo prima non serve più.
+// (Le traduzioni vecchie le toglie già il controllo sulle tavole sparite: qui non tocco altro,
+// perché alcuni lettori cambiano l'indirizzo a ogni pagina.)
 let lastUrl = location.href;
 function checkUrl() {
   if (location.href === lastUrl) return;
   lastUrl = location.href;
-  [...tracked].forEach(forget);
-  document.querySelectorAll('.mercurio-strato').forEach(l => l.remove());
-  queue.length = 0;
   lastTexts = [];
-  if (on) retranslateAll();
-  if (mode === 'novel') novel?.restart();
 }
 
 function relayoutAll() {
@@ -300,7 +297,9 @@ function relayoutAll() {
 let raf = 0;
 const relayoutSoon = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(relayoutAll); };
 window.addEventListener('resize', relayoutSoon);
-window.addEventListener('popstate', relayoutSoon);
+// Tavole tolte dal sito: controllo poco dopo, una volta sola anche se il sito toglie mille cose.
+let cleanupT = 0;
+const cleanupSoon = () => { if (!cleanupT) cleanupT = setTimeout(() => { cleanupT = 0; relayoutAll(); }, 250); };
 setInterval(relayoutAll, 1500); // i siti spostano le tavole mentre caricano
 
 // ---------- Impostazioni ----------
