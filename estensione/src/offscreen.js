@@ -1,7 +1,7 @@
 // Documento nascosto dell'estensione: scarica l'immagine, legge le scritte e le traduce.
 import * as ort from 'onnxruntime-web/webgpu';
 import { PaddleOcr } from './ocr.js';
-import { loadWords, balloons, sentenceCase, isJapanese, readingOrder } from './testo.js';
+import { loadWords, balloons, sentenceCase, isJapanese, readingOrder, nameCandidates } from './testo.js';
 import { PREDEFINITE } from './impostazioni.js';
 
 ort.env.wasm.wasmPaths = chrome.runtime.getURL('ort/');
@@ -84,9 +84,9 @@ async function pickModel(cfg) {
   return autoModel;
 }
 
-function prompt(model, src, japanese = isJapanese(src)) {
+function prompt(model, src, japanese = isJapanese(src), names = []) {
   const [lang, code] = japanese ? ['Japanese', 'ja'] : ['English', 'en'];
-  const t = code === 'en' ? sentenceCase(src) : src;
+  const t = code === 'en' ? sentenceCase(src, names) : src;
   if (model.includes('translategemma')) {
     // Il formato fisso con cui Google ha addestrato TranslateGemma.
     return `You are a professional ${lang} (${code}) to Italian (it) translator. Your goal is to accurately convey ` +
@@ -94,14 +94,16 @@ function prompt(model, src, japanese = isJapanese(src)) {
       `cultural sensitivities.\nProduce only the Italian translation, without any additional explanations or ` +
       `commentary. Please translate the following ${lang} text into Italian:\n\n\n${t}`;
   }
+  const used = names.filter(n => t.toLowerCase().includes(n.toLowerCase()));
   return `Translate this ${lang} comic book text into natural Italian, keeping tone, slang and jokes. ` +
     `The text comes from OCR and may contain small errors: fix them silently. ` +
+    (used.length ? `These are names from the story, keep them as they are: ${used.join(', ')}. ` : '') +
     `Answer with only the Italian translation.\n\n${t}`;
 }
 
 const explainedSound = t => /\)$/.test(t) && t.includes(' (') && !/[a-z]/.test(t.split(' (')[0]);
 
-async function translate(cfg, src) {
+async function translate(cfg, src, names = []) {
   if (explainedSound(src)) return src;
   const model = await pickModel(cfg);
   const key = model + '\n' + src;
@@ -109,32 +111,34 @@ async function translate(cfg, src) {
   const j = await ollama(cfg, '/api/chat', {
     model, stream: false, keep_alive: '30m',
     options: { temperature: 0.2 },
-    messages: [{ role: 'user', content: prompt(model, src) }],
+    messages: [{ role: 'user', content: prompt(model, src, isJapanese(src), names) }],
   });
   const out = (j.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim().replace(/^["«]|["»]$/g, '').trim();
   cache.set(key, out);
   return out;
 }
 
+const CONTESTO = 6; // battute precedenti date al modello insieme alla pagina
+
 /**
  * Tutta la pagina in una richiesta: le nuvolette numerate "1. …", così il modello vede la scena intera.
  * Restituisce null se la risposta non torna con gli stessi numeri (allora si va una nuvoletta alla volta).
  */
-async function translatePage(cfg, texts, context = []) {
+async function translatePage(cfg, texts, context = [], names = []) {
   const model = await pickModel(cfg);
   const its = texts.map(t => explainedSound(t) ? t : cache.get(model + '\n' + t));
   const todo = texts.map((t, i) => [t, i]).filter(([, i]) => its[i] == null);
-  if (todo.length === 1) its[todo[0][1]] = await translate(cfg, todo[0][0]);
+  if (todo.length === 1) its[todo[0][1]] = await translate(cfg, todo[0][0], names);
   else if (todo.length > 1) {
     const japanese = todo.filter(([t]) => isJapanese(t)).length * 2 > todo.length;
-    // Le ultime battute della pagina prima vanno in testa, solo per contesto: la loro traduzione la scarto.
-    const ctx = context.filter(t => t && isJapanese(t) === japanese).slice(-3);
+    // Le ultime battute lette prima vanno in testa, solo per contesto: la loro traduzione la scarto.
+    const ctx = context.filter(t => t && isJapanese(t) === japanese).slice(-CONTESTO);
     const lines = [...ctx, ...todo.map(([t]) => t)];
-    const numbered = lines.map((t, n) => `${n + 1}. ${japanese ? t : sentenceCase(t)}`).join('\n');
+    const numbered = lines.map((t, n) => `${n + 1}. ${japanese ? t : sentenceCase(t, names)}`).join('\n');
     const j = await ollama(cfg, '/api/chat', {
       model, stream: false, keep_alive: '30m',
       options: { temperature: 0.2 },
-      messages: [{ role: 'user', content: prompt(model, numbered, japanese) }],
+      messages: [{ role: 'user', content: prompt(model, numbered, japanese, names) }],
     });
     const raw = (j.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
     const got = new Map();
@@ -167,7 +171,7 @@ async function page(src, data) {
   // Pagine "normali" (manga): righe da destra a sinistra. Strisce lunghe (webtoon): dall'alto in basso.
   const rtl = img.height < img.width * 2;
   const found = readingOrder(balloons(await ocr.read(img)), rtl).map(b => ({ box: b.box, text: b.text }));
-  const result = { w: img.width, h: img.height, balloons: found, ms: Math.round(performance.now() - t0), backend };
+  const result = { w: img.width, h: img.height, balloons: found, nomi: nameCandidates(found.map(b => b.text)), ms: Math.round(performance.now() - t0), backend };
   pages.set(src, result);
   if (pages.size > 300) pages.delete(pages.keys().next().value);
   return result;
@@ -185,8 +189,8 @@ async function test() {
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.to !== 'offscreen') return;
   if (msg.cfg) current = { ...PREDEFINITE, ...msg.cfg };
-  const run = { pagina: () => page(msg.src, msg.data), traduci: async () => ({ it: await translate(await settings(), msg.text) }),
-    traduciPagina: async () => ({ its: await translatePage(await settings(), msg.texts, msg.context) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
+  const run = { pagina: () => page(msg.src, msg.data), traduci: async () => ({ it: await translate(await settings(), msg.text, msg.nomi) }),
+    traduciPagina: async () => ({ its: await translatePage(await settings(), msg.texts, msg.context, msg.nomi) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
   if (!run) return;
   if (!['pagina', 'traduci', 'traduciPagina'].includes(msg.type)) autoModel = null; // dopo un cambio di impostazioni riscelgo il modello
   run().then(reply, e => reply({ error: String(e?.message || e) }));

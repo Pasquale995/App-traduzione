@@ -140,7 +140,7 @@ export class Novel {
       batch[i].out.classList.remove('attesa');
       this.count++;
     }
-    this.last = batch.slice(-2).map(b => b.text);
+    this.last = batch.slice(-4).map(b => b.text);
   }
 
   fail(batch, error) {

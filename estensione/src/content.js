@@ -13,6 +13,41 @@ const done = new WeakMap();   // img -> { src, layer, result }
 const shown = new Set(); // immagini con uno strato: se il sito le toglie (cambio capitolo) nascondo le loro traduzioni
 const queue = [];
 let lastTexts = []; // ultime battute tradotte: contesto per la pagina dopo
+
+// ---------- Memoria della serie: le ultime battute e i nomi, anche tra un capitolo e l'altro ----------
+
+const CONTESTO = 6;
+/** Stessa serie = stesso sito e stesso titolo senza "Chapter 217". */
+function seriesKey() {
+  let t = document.title.toLowerCase()
+    .replace(/\b(chapter|chap|ch|capitolo|cap|episode|ep|vol|volume|raw|scan)\b\.?\s*[\d.]+.*$/, '')
+    .replace(/\d+/g, '').replace(/[^\p{L}]+/gu, ' ').trim();
+  if (!t) t = location.pathname.split('/').filter(p => p && !/\d/.test(p)).slice(0, 2).join('/');
+  return 'serie:' + location.hostname + '|' + t;
+}
+let memoria = { ctx: [], nomi: {} }; // nomi: parola -> in quante pagine l'ho vista
+const memoriaPronta = (async () => {
+  try {
+    const k = seriesKey();
+    const v = (await chrome.storage.local.get(k))[k];
+    if (v) { memoria = { ctx: v.ctx || [], nomi: v.nomi || {} }; lastTexts = memoria.ctx; }
+  } catch {}
+})();
+const contate = new Set(); // pagine i cui nomi ho già contato
+function contaNomi(src, page) {
+  if (contate.has(src)) return;
+  contate.add(src);
+  for (const n of page?.nomi || []) memoria.nomi[n] = (memoria.nomi[n] || 0) + 1;
+}
+function salvaMemoria() {
+  // Tengo i 300 nomi visti più spesso.
+  const e = Object.entries(memoria.nomi);
+  if (e.length > 300) memoria.nomi = Object.fromEntries(e.sort((a, b) => b[1] - a[1]).slice(0, 300));
+  memoria.ctx = lastTexts;
+  chrome.storage.local.set({ [seriesKey()]: memoria }).catch(() => {});
+}
+/** Nomi visti in almeno due pagine: un errore del lettore capita una volta, un personaggio torna. */
+const nomi = () => Object.entries(memoria.nomi).filter(([, c]) => c >= 2).map(([n]) => n);
 let busy = false;
 
 const isCandidate = img =>
@@ -85,11 +120,13 @@ async function work() {
       return;
     }
     d.result = res;
+    await memoriaPronta;
+    contaNomi(d.src, res);
     let n = 0;
     if (cfg.intera && res.balloons.length > 1) {
       // Tutta la pagina in una richiesta; se la risposta non torna, ripiego una alla volta.
       badge(layer, `Mercurio: traduco la pagina (${res.balloons.length})`, false);
-      const t = await send({ to: 'background', type: 'traduciPagina', texts: res.balloons.map(b => b.text), context: lastTexts });
+      const t = await send({ to: 'background', type: 'traduciPagina', texts: res.balloons.map(b => b.text), context: lastTexts, nomi: nomi() });
       if (done.get(img) !== d) return;
       if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); d.src = null; return; }
       if (t?.its) {
@@ -102,12 +139,12 @@ async function work() {
     for (const b of n ? [] : res.balloons) {
       if (done.get(img) !== d || !on || !img.isConnected || img.getBoundingClientRect().width === 0) break;
       badge(layer, `Mercurio: traduco ${++n}/${res.balloons.length}`, false);
-      const t = await send({ to: 'background', type: 'traduci', text: b.text });
+      const t = await send({ to: 'background', type: 'traduci', text: b.text, nomi: nomi() });
       if (t?.error) { badge(layer, 'Mercurio: ' + t.error, true); break; }
       b.it = t.it;
       if (done.get(img) === d) draw(img);
     }
-    if (res.balloons.length) lastTexts = res.balloons.slice(-3).map(b => b.text);
+    if (res.balloons.length) { lastTexts = [...lastTexts, ...res.balloons.map(b => b.text)].slice(-CONTESTO); salvaMemoria(); }
     if (done.get(img) === d && n === res.balloons.length) badge(layer, null);
     else if (done.get(img) === d) d.src = null; // interrotta: la riprendo quando torna visibile
   }

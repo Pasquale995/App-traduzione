@@ -301,8 +301,11 @@ export function readingOrder(items, rtl) {
     .flatMap(r => r.items.sort((a, b) => rtl ? (b.box.x + b.box.w) - (a.box.x + a.box.w) : a.box.x - b.box.x));
 }
 
-/** "TUTTO MAIUSCOLO" -> "Tutto maiuscolo": i traduttori lo gestiscono meglio. */
-export function sentenceCase(text) {
+/**
+ * "TUTTO MAIUSCOLO" -> "Tutto maiuscolo": i traduttori lo gestiscono meglio.
+ * I nomi già visti nella serie restano con la maiuscola ("sunraku" -> "Sunraku"), così il modello non li traduce.
+ */
+export function sentenceCase(text, names = []) {
   const letters = [...text].filter(c => /[A-Za-z]/.test(c));
   if (!letters.length || letters.filter(c => c === c.toUpperCase()).length < letters.length * 0.7) return text;
   let cap = true, out = '';
@@ -310,5 +313,26 @@ export function sentenceCase(text) {
     if (cap && /[a-z]/.test(c)) { out += c.toUpperCase(); cap = false; }
     else { out += c; if ('.!?'.includes(c)) cap = true; }
   }
-  return out.replace(/\bi\b/g, 'I').replace(/\bi'/g, "I'");
+  out = out.replace(/\bi\b/g, 'I').replace(/\bi'/g, "I'");
+  if (names.length) {
+    const set = new Set(names.map(n => n.toLowerCase()));
+    out = out.replace(/[a-z][a-z'-]*/gi, w => set.has(w.toLowerCase()) ? w[0].toUpperCase() + w.slice(1) : w);
+  }
+  return out;
+}
+
+const known = w => words.has(w) || ['s', 'es', 'ed', 'd', 'ing', 'ly', 'er', 'est', "'s"].some(suf => w.endsWith(suf) && words.has(w.slice(0, -suf.length)));
+
+/** Parole che non sono nel dizionario inglese: probabili nomi di personaggi, luoghi, tecniche. */
+export function nameCandidates(texts) {
+  if (!words.size) return [];
+  const out = new Set();
+  for (const t of texts) {
+    if (isJapanese(t)) continue;
+    for (const w of t.match(/[A-Za-z][A-Za-z'-]{2,}/g) || []) {
+      const lw = w.toLowerCase().replace(/'s$/, '');
+      if (lw.length >= 3 && !known(lw) && !/(.)\1\1/.test(lw)) out.add(lw[0].toUpperCase() + lw.slice(1)); // "AAAH" è un verso, non un nome
+    }
+  }
+  return [...out];
 }
