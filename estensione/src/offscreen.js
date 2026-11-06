@@ -57,17 +57,22 @@ async function loadImage(src) {
 const cache = new Map();
 let autoModel = null;
 
-async function ollama(cfg, path, body) {
+async function ollama(cfg, path, body, maxMs = 0) {
   const base = cfg.ollama.trim().replace(/\/+$/, '');
+  const stop = new AbortController();
+  const timer = maxMs && setTimeout(() => stop.abort(), maxMs);
   let res;
   try {
-    res = await fetch(base + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+    res = await fetch(base + path, { signal: stop.signal, ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
+    if (res.ok) return await res.json();
   } catch {
+    if (stop.signal.aborted) throw new Error('ci mette troppo');
     throw new Error('Ollama non risponde: è aperto sul PC?');
+  } finally {
+    clearTimeout(timer);
   }
   if (res.status === 403) throw new Error("Ollama rifiuta l'estensione: imposta OLLAMA_ORIGINS=chrome-extension://* e riavvialo");
-  if (!res.ok) throw new Error(`Ollama ha risposto ${res.status}: ${(await res.text()).slice(0, 150)}`);
-  return res.json();
+  throw new Error(`Ollama ha risposto ${res.status}: ${(await res.text()).slice(0, 150)}`);
 }
 
 async function models(cfg) {
@@ -110,7 +115,7 @@ async function translate(cfg, src, names = []) {
   if (cache.has(key)) return cache.get(key);
   const j = await ollama(cfg, '/api/chat', {
     model, stream: false, keep_alive: '30m',
-    options: { temperature: 0.2 },
+    options: { temperature: 0.2, num_predict: 400 }, // tetto: un modello che si inceppa non deve andare avanti all'infinito
     messages: [{ role: 'user', content: prompt(model, src, isJapanese(src), names) }],
   });
   const out = (j.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim().replace(/^["«]|["»]$/g, '').trim();
@@ -137,7 +142,7 @@ async function translatePage(cfg, texts, context = [], names = []) {
     const numbered = lines.map((t, n) => `${n + 1}. ${japanese ? t : sentenceCase(t, names)}`).join('\n');
     const j = await ollama(cfg, '/api/chat', {
       model, stream: false, keep_alive: '30m',
-      options: { temperature: 0.2 },
+      options: { temperature: 0.2, num_predict: 100 * lines.length + 200 },
       messages: [{ role: 'user', content: prompt(model, numbered, japanese, names) }],
     });
     const raw = (j.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '');
@@ -192,12 +197,16 @@ async function revise(cfg, { titolo, scheda, nomi = [], coppie = [], righe }) {
   parts.push(`For every numbered balloon write the final Italian text: natural spoken Italian as in a published comic, short, faithful to the meaning and to who is speaking. ` +
     `Keep the same numbers, exactly one line per number, and write nothing else.`);
   parts.push(righe.map((r, i) => `${i + 1}. ${lang}: ${fix(r.o)}\n   Bozza: ${r.it}`).join('\n'));
-  let content = parts.join('\n\n');
-  if (/qwen3/i.test(model)) content += '\n/no_think'; // Qwen3 risponde subito invece di "pensare" a lungo
-  const j = await ollama(cfg, '/api/chat', {
-    model, stream: false, keep_alive: '30m', options: { temperature: 0.3 },
-    messages: [{ role: 'user', content }],
-  });
+  const body = {
+    model, stream: false, keep_alive: '30m',
+    // Tetto alle parole: senza, un modello che si mette a "ragionare" tiene la scheda video al 100% per minuti.
+    options: { temperature: 0.3, num_predict: 100 * righe.length + 200 },
+    messages: [{ role: 'user', content: parts.join('\n\n') }],
+  };
+  // I modelli che "pensano" prima di rispondere (Qwen3, DeepSeek R1…): niente ragionamento, solo la risposta.
+  if (/qwen3|deepseek-r1|magistral|gpt-oss/i.test(model)) body.think = false;
+  // Due minuti bastano anche per caricare il modello la prima volta; oltre, si tiene la bozza.
+  const j = await ollama(cfg, '/api/chat', body, 120000);
   const got = numbered(j.message?.content || '');
   return righe.map((_, i) => {
     const t = got.get(i + 1)?.replace(/^(Italian|Italiano|Finale|Bozza)\s*:\s*/i, '').replace(/^["«]|["»]$/g, '').trim();

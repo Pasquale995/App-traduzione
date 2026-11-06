@@ -150,7 +150,7 @@ async function work() {
       b.it = t.it;
       if (done.get(img) === d) draw(img);
     }
-    if (cfg.correttore && n === res.balloons.length && done.get(img) === d) await rivedi(img, d, res, layer);
+    if (cfg.correttore && !correttoreSpento && n === res.balloons.length && done.get(img) === d) await rivedi(img, d, res, layer);
     if (res.balloons.length) {
       lastTexts = [...lastTexts, ...res.balloons.map(b => b.text)].slice(-CONTESTO);
       memoria.coppie = [...memoria.coppie, ...res.balloons.filter(b => b.it).map(b => ({ o: b.text, it: b.it }))].slice(-CONTESTO);
@@ -160,6 +160,8 @@ async function work() {
     else if (done.get(img) === d) d.src = null; // interrotta: la riprendo quando torna visibile
   }
 }
+
+let correttoreSpento = false; // se si inceppa, per questa pagina del browser vado avanti con le sole bozze
 
 /** Secondo passaggio: un altro modello rilegge la bozza con la scheda della serie e il contesto. */
 async function rivedi(img, d, res, layer) {
@@ -171,7 +173,11 @@ async function rivedi(img, d, res, layer) {
     coppie: memoria.coppie, righe: righe.map(b => ({ o: b.text, it: b.it })),
   });
   if (done.get(img) !== d) return;
-  if (r?.error) { stato('correttore: ' + r.error, 'errore'); return; } // resta la bozza: va bene lo stesso
+  if (r?.error) { // resta la bozza: va bene lo stesso
+    if (/troppo/.test(r.error)) { correttoreSpento = true; stato('il correttore ci mette troppo: lo salto fino a quando ricarichi la pagina', 'errore'); }
+    else stato('correttore: ' + r.error, 'errore');
+    return;
+  }
   (r?.its || []).forEach((it, i) => { if (it) righe[i].it = it; });
   draw(img);
 }
