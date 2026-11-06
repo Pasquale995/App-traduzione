@@ -5,14 +5,31 @@ const $ = id => document.getElementById(id);
 const esito = t => { $('esito').textContent = t; };
 const ask = msg => chrome.runtime.sendMessage({ to: 'background', ...msg });
 
-async function loadModels(current) {
+async function loadModels(current, correttore) {
   const r = await ask({ type: 'modelli' });
-  const sel = $('modello');
-  sel.length = 1;
-  if (r?.error) { esito(r.error); return; }
-  for (const m of r.modelli) sel.add(new Option(m, m));
-  if (current && !r.modelli.includes(current)) sel.add(new Option(current + ' (non trovato)', current));
-  sel.value = current;
+  for (const [id, val] of [['modello', current], ['correttore', correttore]]) {
+    const sel = $(id);
+    sel.length = 1;
+    if (r?.error) continue;
+    for (const m of r.modelli) sel.add(new Option(m, m));
+    if (val && !r.modelli.includes(val)) sel.add(new Option(val + ' (non trovato)', val));
+    sel.value = val;
+  }
+  if (r?.error) esito(r.error);
+}
+
+/** La scheda della serie aperta in questa scheda del browser (la chiedo alla pagina). */
+async function loadSerie(tab) {
+  const r = await chrome.tabs.sendMessage(tab.id, { to: 'pagina', type: 'serie' }).catch(() => null);
+  if (!r) return;
+  $('serie').hidden = false;
+  $('titolo').textContent = r.titolo || 'questo sito';
+  $('scheda').value = r.scheda;
+  $('nomiV').textContent = r.nomi.length ? 'Nomi trovati leggendo: ' + r.nomi.slice(0, 30).join(', ') : '';
+  $('salvaScheda').onclick = async () => {
+    await chrome.tabs.sendMessage(tab.id, { to: 'pagina', type: 'salvaScheda', scheda: $('scheda').value });
+    esito('Scheda salvata: vale da questa pagina in poi.');
+  };
 }
 
 async function init() {
@@ -21,10 +38,11 @@ async function init() {
   $('intera').checked = cfg.intera;
   $('intera').onchange = () => chrome.storage.sync.set({ intera: $('intera').checked });
   for (const k of ['opacita', 'testo']) { $(k).value = cfg[k]; $(k + 'V').textContent = cfg[k]; }
-  loadModels(cfg.modello);
+  loadModels(cfg.modello, cfg.correttore);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   let mode = (await ask({ type: 'stato', tabId: tab?.id }))?.mode || null;
+  if (tab) loadSerie(tab);
   const NOMI = { fumetto: 'Leggi fumetto', novel: 'Leggi novel' };
   const show = () => {
     for (const k of ['fumetto', 'novel']) {
@@ -44,9 +62,10 @@ async function init() {
   }
   $('ollama').onchange = async () => {
     await chrome.storage.sync.set({ ollama: $('ollama').value.trim() || PREDEFINITE.ollama });
-    loadModels($('modello').value);
+    loadModels($('modello').value, $('correttore').value);
   };
   $('modello').onchange = () => chrome.storage.sync.set({ modello: $('modello').value });
+  $('correttore').onchange = () => chrome.storage.sync.set({ correttore: $('correttore').value });
   for (const k of ['opacita', 'testo']) {
     $(k).oninput = () => { $(k + 'V').textContent = $(k).value; chrome.storage.sync.set({ [k]: Number($(k).value) }); };
   }

@@ -7,6 +7,8 @@
   h1 { font-size: 17px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
   h1 img { width: 26px; height: 26px; }
   label { display: block; margin: 10px 0 4px; color: #bbb; }
+  textarea { width: 100%; box-sizing: border-box; height: 120px; padding: 6px; border-radius: 6px; border: 1px solid #555; background: #2a2730; color: #eee; font: 12px system-ui, sans-serif; resize: vertical; }
+  .nota { color: #999; font-size: 11px; margin-top: 3px; }
   input[type=text], select { width: 100%; box-sizing: border-box; padding: 6px; border-radius: 6px; border: 1px solid #555; background: #2a2730; color: #eee; }
   input[type=range] { width: 100%; }
   .riga { display: flex; align-items: center; justify-content: space-between; }
@@ -25,6 +27,15 @@
   <input type="text" id="ollama" placeholder="http://localhost:11434">
   <label for="modello">Modello</label>
   <select id="modello"><option value="">Automatico (TranslateGemma se c'è)</option></select>
+  <label for="correttore">Correttore (secondo passaggio)</label>
+  <select id="correttore"><option value="">Nessuno</option></select>
+  <div class="nota">Rilegge la traduzione con la scheda della serie. Consigliati: qwen3:8b, gemma3:12b, gemma4.</div>
+  <div id="serie" hidden>
+    <label for="scheda">Scheda della serie: <b id="titolo"></b></label>
+    <textarea id="scheda" placeholder="Straw Hat = Cappello di Paglia&#10;Haki = Ambizione&#10;Imu parla di sé in terza persona"></textarea>
+    <div class="nota" id="nomiV"></div>
+    <div class="tasti"><button id="salvaScheda" class="secondario">Salva la scheda</button></div>
+  </div>
   <div class="riga" style="margin-top:10px"><label for="intera" style="margin:0">Traduci la pagina intera in una volta</label><input type="checkbox" id="intera"></div>
   <label for="opacita">Riquadri: opacità <span id="opacitaV"></span>%</label>
   <input type="range" id="opacita" min="20" max="100" step="5">

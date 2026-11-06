@@ -2,6 +2,7 @@
 import { PREDEFINITE } from './impostazioni.js';
 import { stato } from './stato.js';
 import { Novel } from './novel.js';
+import { schedaPronta } from './schede.js';
 
 let cfg = { ...PREDEFINITE };
 let on = false; // modalità fumetto: si accende solo dal popup, scheda per scheda
@@ -17,20 +18,24 @@ let lastTexts = []; // ultime battute tradotte: contesto per la pagina dopo
 // ---------- Memoria della serie: le ultime battute e i nomi, anche tra un capitolo e l'altro ----------
 
 const CONTESTO = 6;
-/** Stessa serie = stesso sito e stesso titolo senza "Chapter 217". */
+/** Il titolo della serie: quello della pagina senza "Chapter 217 - Sito". */
+const serieTitolo = () => document.title
+  .replace(/\b(chapter|chap|ch|capitolo|cap|episode|ep|vol|volume|raw|scan)\b\.?\s*[\d.]+.*$/i, '')
+  .replace(/\d+/g, '').replace(/[^\p{L}'’]+/gu, ' ').trim();
+/** Stessa serie = stesso sito e stesso titolo. */
 function seriesKey() {
-  let t = document.title.toLowerCase()
-    .replace(/\b(chapter|chap|ch|capitolo|cap|episode|ep|vol|volume|raw|scan)\b\.?\s*[\d.]+.*$/, '')
-    .replace(/\d+/g, '').replace(/[^\p{L}]+/gu, ' ').trim();
+  let t = serieTitolo().toLowerCase();
   if (!t) t = location.pathname.split('/').filter(p => p && !/\d/.test(p)).slice(0, 2).join('/');
   return 'serie:' + location.hostname + '|' + t;
 }
-let memoria = { ctx: [], nomi: {} }; // nomi: parola -> in quante pagine l'ho vista
+// nomi: parola -> in quante pagine l'ho vista; coppie: ultime battute con la traduzione finale;
+// scheda: la conoscenza della serie scritta nel popup (se manca, quella già pronta).
+let memoria = { ctx: [], nomi: {}, coppie: [] };
 const memoriaPronta = (async () => {
   try {
     const k = seriesKey();
     const v = (await chrome.storage.local.get(k))[k];
-    if (v) { memoria = { ctx: v.ctx || [], nomi: v.nomi || {} }; lastTexts = memoria.ctx; }
+    if (v) { memoria = { ctx: v.ctx || [], nomi: v.nomi || {}, coppie: v.coppie || [], scheda: v.scheda }; lastTexts = memoria.ctx; }
   } catch {}
 })();
 const contate = new Set(); // pagine i cui nomi ho già contato
@@ -46,6 +51,7 @@ function salvaMemoria() {
   memoria.ctx = lastTexts;
   chrome.storage.local.set({ [seriesKey()]: memoria }).catch(() => {});
 }
+const scheda = () => memoria.scheda ?? schedaPronta(serieTitolo());
 /** Nomi visti in almeno due pagine: un errore del lettore capita una volta, un personaggio torna. */
 const nomi = () => Object.entries(memoria.nomi).filter(([, c]) => c >= 2).map(([n]) => n);
 let busy = false;
@@ -144,10 +150,30 @@ async function work() {
       b.it = t.it;
       if (done.get(img) === d) draw(img);
     }
-    if (res.balloons.length) { lastTexts = [...lastTexts, ...res.balloons.map(b => b.text)].slice(-CONTESTO); salvaMemoria(); }
+    if (cfg.correttore && n === res.balloons.length && done.get(img) === d) await rivedi(img, d, res, layer);
+    if (res.balloons.length) {
+      lastTexts = [...lastTexts, ...res.balloons.map(b => b.text)].slice(-CONTESTO);
+      memoria.coppie = [...memoria.coppie, ...res.balloons.filter(b => b.it).map(b => ({ o: b.text, it: b.it }))].slice(-CONTESTO);
+      salvaMemoria();
+    }
     if (done.get(img) === d && n === res.balloons.length) badge(layer, null);
     else if (done.get(img) === d) d.src = null; // interrotta: la riprendo quando torna visibile
   }
+}
+
+/** Secondo passaggio: un altro modello rilegge la bozza con la scheda della serie e il contesto. */
+async function rivedi(img, d, res, layer) {
+  const righe = res.balloons.filter(b => b.it && b.it !== b.text);
+  if (!righe.length) return;
+  badge(layer, 'Mercurio: rivedo la traduzione…', false);
+  const r = await send({
+    to: 'background', type: 'correggi', titolo: serieTitolo(), scheda: scheda(), nomi: nomi(),
+    coppie: memoria.coppie, righe: righe.map(b => ({ o: b.text, it: b.it })),
+  });
+  if (done.get(img) !== d) return;
+  if (r?.error) { stato('correttore: ' + r.error, 'errore'); return; } // resta la bozza: va bene lo stesso
+  (r?.its || []).forEach((it, i) => { if (it) righe[i].it = it; });
+  draw(img);
 }
 
 async function fromPage(src) {
@@ -359,8 +385,16 @@ function setMode(m) {
   else stato(mode === 'fumetto' ? 'acceso: cerco le tavole…' : 'acceso: cerco il testo…', 'lavoro');
 }
 
-chrome.runtime.onMessage.addListener(msg => {
+chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.to !== 'pagina') return;
+  if (msg.type === 'serie') {
+    memoriaPronta.then(() => reply({ titolo: serieTitolo(), scheda: scheda(), pronta: memoria.scheda == null, nomi: nomi() }));
+    return true;
+  }
+  if (msg.type === 'salvaScheda') {
+    memoriaPronta.then(() => { memoria.scheda = msg.scheda; salvaMemoria(); reply({ ok: true }); });
+    return true;
+  }
   if (msg.type === 'ritraduci') { if (on) retranslateAll(); if (mode === 'novel') novel?.restart(); }
   if (msg.type === 'acceso') setMode(msg.mode);
 });

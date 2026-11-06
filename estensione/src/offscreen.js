@@ -159,6 +159,52 @@ async function translatePage(cfg, texts, context = [], names = []) {
   return its;
 }
 
+// ---------- Secondo passaggio: il correttore ----------
+
+/** Le righe "N. testo" della risposta, anche quando il modello va a capo dentro una battuta. */
+function numbered(raw) {
+  const got = new Map();
+  let last = 0;
+  for (const line of raw.replace(/<think>[\s\S]*?<\/think>/g, '').split('\n')) {
+    const m = line.match(/^\s*\**(\d+)\**\s*[.)\]:-]\s*(.*)$/);
+    if (m) { last = Number(m[1]); got.set(last, m[2].trim()); }
+    else if (last && line.trim()) got.set(last, got.get(last) + ' ' + line.trim());
+  }
+  return got;
+}
+
+/**
+ * Un modello generale rilegge la bozza di TranslateGemma sapendo che fumetto è, cosa è successo prima
+ * e come si chiamano personaggi e cose. Restituisce le nuove traduzioni (null dove non ha risposto bene).
+ */
+async function revise(cfg, { titolo, scheda, nomi = [], coppie = [], righe }) {
+  const model = cfg.correttore;
+  const japanese = righe.filter(r => isJapanese(r.o)).length * 2 > righe.length;
+  const lang = japanese ? 'Japanese' : 'English';
+  const fix = t => japanese ? t : sentenceCase(t, nomi);
+  const parts = [
+    `You are the Italian adapter of the comic${titolo ? ` "${titolo}"` : ''}. A small model made a first Italian translation of the balloons of one page; it is often too literal or wrong.`,
+    `The ${lang} text was read by OCR, so it can contain misread words: guess the intended word from the context.`,
+  ];
+  if (scheda?.trim()) parts.push(`Notes about this series (use these names and terms, they always win):\n${scheda.trim()}`);
+  if (nomi.length) parts.push(`Names that appear in this series: ${nomi.slice(0, 80).join(', ')}.`);
+  if (coppie.length) parts.push(`Previous balloons, for context only:\n` + coppie.map(c => `- ${fix(c.o)} → ${c.it}`).join('\n'));
+  parts.push(`For every numbered balloon write the final Italian text: natural spoken Italian as in a published comic, short, faithful to the meaning and to who is speaking. ` +
+    `Keep the same numbers, exactly one line per number, and write nothing else.`);
+  parts.push(righe.map((r, i) => `${i + 1}. ${lang}: ${fix(r.o)}\n   Bozza: ${r.it}`).join('\n'));
+  let content = parts.join('\n\n');
+  if (/qwen3/i.test(model)) content += '\n/no_think'; // Qwen3 risponde subito invece di "pensare" a lungo
+  const j = await ollama(cfg, '/api/chat', {
+    model, stream: false, keep_alive: '30m', options: { temperature: 0.3 },
+    messages: [{ role: 'user', content }],
+  });
+  const got = numbered(j.message?.content || '');
+  return righe.map((_, i) => {
+    const t = got.get(i + 1)?.replace(/^(Italian|Italiano|Finale|Bozza)\s*:\s*/i, '').replace(/^["«]|["»]$/g, '').trim();
+    return t || null;
+  });
+}
+
 // ---------- Messaggi ----------
 
 const pages = new Map(); // src -> scritte già lette
@@ -190,9 +236,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.to !== 'offscreen') return;
   if (msg.cfg) current = { ...PREDEFINITE, ...msg.cfg };
   const run = { pagina: () => page(msg.src, msg.data), traduci: async () => ({ it: await translate(await settings(), msg.text, msg.nomi) }),
-    traduciPagina: async () => ({ its: await translatePage(await settings(), msg.texts, msg.context, msg.nomi) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
+    traduciPagina: async () => ({ its: await translatePage(await settings(), msg.texts, msg.context, msg.nomi) }), correggi: async () => ({ its: await revise(await settings(), msg) }), prova: test, modelli: async () => ({ modelli: await models(await settings()) }) }[msg.type];
   if (!run) return;
-  if (!['pagina', 'traduci', 'traduciPagina'].includes(msg.type)) autoModel = null; // dopo un cambio di impostazioni riscelgo il modello
+  if (!['pagina', 'traduci', 'traduciPagina', 'correggi'].includes(msg.type)) autoModel = null; // dopo un cambio di impostazioni riscelgo il modello
   run().then(reply, e => reply({ error: String(e?.message || e) }));
   return true;
 });
